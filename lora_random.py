@@ -68,7 +68,7 @@ def _role(meta, rel):
     for c in ("detail", "style"):
         if tags & CAT_WORDS[c]:
             return c
-    if ACT_RE.search(txt) and (tags & {"nsfw", "sex", "sexual", "concept", "concepts"} or not tags):
+    if ACT_RE.search(txt):
         return "act"
     if tags & CAT_WORDS["clothing"]:
         return "clothing"
