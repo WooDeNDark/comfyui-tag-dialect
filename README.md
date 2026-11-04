@@ -34,6 +34,10 @@ male: no
 
 A line without a key is treated as trigger words.
 
+## NSFW Action Picker
+
+Adds an action or an explicit pose that fits the composition (`solo`, `pair_mf`, `pair_ff`, `group`) and the dialect. Pools live in `actions.json`, edit that file to change them. It can also swap the clothing and expression slots for explicit variants (`extras_chance`). A chosen tag removes the tag of the regular slot. The prompt stays unchanged in SFW mode; an `act` LoRA keeps its scene and a `clothing` LoRA keeps its outfit.
+
 ## Quality tags
 
 Tag Dialect Switch also prepends family-specific quality tags (Illustrious/NoobAI, Pony score tags, SDXL, Anima) and appends their negative pair.
