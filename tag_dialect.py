@@ -232,6 +232,30 @@ def decide(ckpt_name, mode, fallback_regex):
     return "danbooru", f"{why_fb}; правило не сработало", fam
 
 
+def composition(text):
+    t = f", {(text or '').lower()},"
+    has = lambda w: re.search(rf"(^|,)\s*{re.escape(w)}\s*(,|$)", t) is not None
+    male = has("male/female") or has("1boy") or has("hetero") or "1boy" in t
+    multi = male or any(has(w) for w in ("duo", "trio", "group", "2girls", "3girls", "multiple girls", "female/female"))
+    solo = has("solo") and not multi
+    return solo, multi, male
+
+
+# Мужской персонаж соло и male/male не нужны никогда; при solo — запрещаем второго персонажа
+COMP_NEG_ALWAYS = "male/male, male focus, yaoi, 2boys, multiple boys, bara"
+COMP_NEG_SOLO = "duo, trio, group, 1boy, male, 2girls, multiple girls"
+COMP_NEG_FEMALE_ONLY = "1boy, male"
+
+
+def composition_negative(text):
+    solo, multi, male = composition(text)
+    if solo:
+        return _join(COMP_NEG_ALWAYS, COMP_NEG_SOLO)
+    if multi and not male:
+        return _join(COMP_NEG_ALWAYS, COMP_NEG_FEMALE_ONLY)
+    return COMP_NEG_ALWAYS
+
+
 def _join(*parts):
     """Склеивает куски промпта через запятую и убирает повторы тегов."""
     out, seen = [], set()
@@ -260,6 +284,8 @@ class TagDialectSwitch:
                                               "tooltip": "Если модели нет на Civitai: путь совпал -> e621, иначе Danbooru"}),
                 "add_quality": ("BOOLEAN", {"default": True,
                                             "tooltip": "Добавить в начало качество-теги под семейство модели (score_9… для Pony и т.д.), а в негатив — их пару"}),
+                "composition_negative": ("BOOLEAN", {"default": True,
+                                                     "tooltip": "Негатив по составу: всегда без male/male и мужского соло; при solo — без второго персонажа"}),
             },
             "optional": {
                 "e621_text": ("STRING", {"forceInput": True, "lazy": True}),
@@ -273,7 +299,7 @@ class TagDialectSwitch:
     FUNCTION = "run"
     CATEGORY = "utils/prompt"
 
-    def check_lazy_status(self, ckpt_name, mode, fallback_regex, add_quality=True,
+    def check_lazy_status(self, ckpt_name, mode, fallback_regex, add_quality=True, composition_negative=True,
                           e621_text=None, danbooru_text=None, negative_text=None):
         d, _, _ = decide(ckpt_name, mode, fallback_regex)
         if d == "e621" and e621_text is None:
@@ -282,7 +308,7 @@ class TagDialectSwitch:
             return ["danbooru_text"]
         return []
 
-    def run(self, ckpt_name, mode, fallback_regex, add_quality=True,
+    def run(self, ckpt_name, mode, fallback_regex, add_quality=True, composition_negative=True,
             e621_text=None, danbooru_text=None, negative_text=None):
         d, info, fam = decide(ckpt_name, mode, fallback_regex)
         text = (e621_text if d == "e621" else danbooru_text) or ""
@@ -292,6 +318,8 @@ class TagDialectSwitch:
                 source="source_furry" if d == "e621" else "source_anime")
             text = _join(q, text)
             neg = _join(neg, QUALITY_NEG.get(fam, QUALITY_NEG["other"]))
+        if composition_negative:
+            neg = _join(neg, globals()["composition_negative"](text))
         info = f"{d.upper()} · семейство {fam} ← {info}  [{ckpt_name}]"
         print(f"[TagDialect] {info}")
         return {"ui": {"text": [info]}, "result": (text, d, info, d == "e621", neg, fam)}
