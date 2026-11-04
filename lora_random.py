@@ -33,12 +33,14 @@ NSFW_PROMPT = re.compile(r"(^|,)\s*(nsfw|explicit|rating[_ ]explicit|questionabl
 
 
 def _category(meta, rel):
-    if re.search(r"detail|enhanc", rel, re.I):
-        return "detail"
     tags = set(meta.get("tags") or []) if meta else set()
+    if tags & set(CAT_WORDS["concept"]) and tags & {"nsfw", "sex", "sexual", "penis", "pussy"}:
+        return "concept"
     for c in CATS:
         if tags & set(CAT_WORDS[c]):
             return c
+    if re.search(r"detail(?!ed)|enhanc", rel, re.I):
+        return "detail"
     p = rel.lower().replace("\\", "/")
     for c in CATS:
         if any(f"/{w}/" in f"/{p}" for w in CAT_WORDS[c]) or (c == "detail" and "detail" in p):
@@ -181,7 +183,8 @@ class LoraRandomizer:
                 skipped["семейство"] += 1
             elif l["category"] not in cats:
                 skipped["категория"] += 1
-            elif l["nsfw"] and not allow_nsfw:
+            elif not allow_nsfw and (l["nsfw"] if l["category"] not in ("style", "detail")
+                                     else bool(NSFW_NAME.search(l["rel"]) or NSFW_NAME.search(l["name"] or ""))):
                 skipped["nsfw"] += 1
             elif excl and excl.search(l["rel"]):
                 skipped["исключено"] += 1
