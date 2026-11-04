@@ -16,9 +16,13 @@ LORA_TAG_RE = re.compile(r"\s*<lora:[^>]+>")
 ACT_LORA_RE = re.compile(r"\[act\b")
 GROUP_RE = re.compile(r"(^|,)\s*(trio|group|3girls|multiple girls)\s*(,|$)", re.I)
 CLOTHING_LORA_RE = re.compile(r"\[clothing\b")
-EXTRAS = (("clothing", "nsfw_clothing", ["Одежда"], "Одежда"), ("expression", "nsfw_expression", ["Эмоция"], "Эмоция"),
-          ("camera", "nsfw_camera", ["Кадр"], "Кадр"), ("location", "nsfw_location", ["Окружение"], "Окружение"),
-          ("body", "nsfw_body", ["Телосложение"], "Телосложение"))
+# (имя, пул, слоты, заголовок, множитель к extras_chance). Маленькие пулы срабатывают реже,
+# иначе половина картинок попадёт в пару одинаковых локаций и ракурсов.
+EXTRAS = (("clothing", "nsfw_clothing", ["Одежда"], "Одежда", 1.0),
+          ("expression", "nsfw_expression", ["Эмоция"], "Эмоция", 1.0),
+          ("camera", "nsfw_camera", ["Кадр"], "Кадр", 0.3),
+          ("location", "nsfw_location", ["Окружение"], "Окружение", 0.2),
+          ("body", "nsfw_body", ["Телосложение"], "Телосложение", 0.3))
 
 
 def load_actions():
@@ -100,11 +104,11 @@ class NsfwActionPicker:
             prefixes = [p.strip() for p in pose_slots.split(",") if p.strip()]
             notes.append(f"Действие [{key}]: {action}" + swap(prefixes, action))
 
-        for name, pool_name, slots, title in EXTRAS:
+        for name, pool_name, slots, title, rate in EXTRAS:
             extra = pools.get(pool_name) or []
             if name == "clothing" and CLOTHING_LORA_RE.search(lora_info):
                 notes.append("Одежда: задаёт LoRA")
-            elif extra and rnd.random() < extras_chance:
+            elif extra and rnd.random() < extras_chance * rate:
                 tag = rnd.choice(extra)
                 notes.append(f"{title}: {tag}" + swap(slots, tag))
 
