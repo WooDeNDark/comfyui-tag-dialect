@@ -16,7 +16,9 @@ LORA_TAG_RE = re.compile(r"\s*<lora:[^>]+>")
 ACT_LORA_RE = re.compile(r"\[act\b")
 GROUP_RE = re.compile(r"(^|,)\s*(trio|group|3girls|multiple girls)\s*(,|$)", re.I)
 CLOTHING_LORA_RE = re.compile(r"\[clothing\b")
-EXTRAS = (("clothing", "nsfw_clothing", ["Одежда"], "Одежда"), ("expression", "nsfw_expression", ["Эмоция"], "Эмоция"))
+EXTRAS = (("clothing", "nsfw_clothing", ["Одежда"], "Одежда"), ("expression", "nsfw_expression", ["Эмоция"], "Эмоция"),
+          ("camera", "nsfw_camera", ["Кадр"], "Кадр"), ("location", "nsfw_location", ["Окружение"], "Окружение"),
+          ("body", "nsfw_body", ["Телосложение"], "Телосложение"))
 
 
 def load_actions():
@@ -50,7 +52,7 @@ class NsfwActionPicker:
                                      "tooltip": "Вероятность добавить действие; в остальных случаях остаётся слот «Поза»"}),
                 "pose_slots": ("STRING", {"default": "Поза", "tooltip": "Начало заголовка слотов, которые действие заменяет"}),
                 "extras_chance": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.05,
-                                            "tooltip": "Вероятность заменить слоты «Одежда» и «Эмоция» откровенным вариантом"}),
+                                            "tooltip": "Вероятность заменить слоты «Одежда», «Эмоция», «Кадр», «Окружение», «Телосложение» откровенным вариантом"}),
             },
             "optional": {
                 "lora_info": ("STRING", {"forceInput": True,
