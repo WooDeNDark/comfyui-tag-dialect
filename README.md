@@ -11,3 +11,12 @@ Decision order (`mode = auto`):
 
 `mode = e621 / danbooru` forces the choice. Only the chosen branch is evaluated (lazy inputs).
 Hashes and Civitai answers are cached in `cache.json` next to the node. Set `CIVITAI_API_TOKEN` to use your Civitai key.
+
+## LoRA Randomizer
+
+Adds 0..`max_loras` random LoRAs compatible with the current checkpoint (Civitai base model by SHA256, folder name as fallback),
+with their trigger words, as `<lora:name:weight>` tags for LoraTagLoader. NSFW LoRAs are used only when the prompt is NSFW (`auto`).
+
+## Quality tags
+
+Tag Dialect Switch also prepends family-specific quality tags (Illustrious/NoobAI, Pony score tags, SDXL, Anima) and appends their negative pair.
