@@ -33,6 +33,8 @@ NSFW_PROMPT = re.compile(r"(^|,)\s*(nsfw|explicit|rating[_ ]explicit|questionabl
 
 
 def _category(meta, rel):
+    if re.search(r"detail|enhanc", rel, re.I):
+        return "detail"
     tags = set(meta.get("tags") or []) if meta else set()
     for c in CATS:
         if tags & set(CAT_WORDS[c]):
@@ -44,6 +46,19 @@ def _category(meta, rel):
     if re.search(r"(^|/)(sexy|concept)/", p):
         return "concept"
     return "other"
+
+
+NSFW_TAGS = {"nsfw", "sexy", "lingerie", "underwear", "nude", "nudity", "lewd", "fetish", "hentai", "porn", "erotic"}
+
+
+def _is_nsfw(meta, rel):
+    """Флаг Civitai часто не стоит у «бельевых» LoRA — проверяем ещё теги, имя файла и trigger words."""
+    if meta:
+        if meta.get("nsfw") or (set(meta.get("tags") or []) & NSFW_TAGS):
+            return True
+        if NSFW_NAME.search(" ".join(meta.get("trained") or [])) or NSFW_NAME.search(meta.get("name") or ""):
+            return True
+    return bool(NSFW_NAME.search(rel))
 
 
 def lora_catalog():
@@ -68,7 +83,7 @@ def lora_catalog():
                 out.append({
                     "rel": rel, "stem": stem, "family": fam,
                     "category": _category(meta if found else None, rel),
-                    "nsfw": bool(meta.get("nsfw")) if found else bool(NSFW_NAME.search(rel)),
+                    "nsfw": _is_nsfw(meta if found else None, rel),
                     "trained": (meta.get("trained") or []) if found else [],
                     "name": meta.get("name") if found else stem,
                     "src": "Civitai" if found else "папка/имя",
