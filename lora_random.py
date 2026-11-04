@@ -61,6 +61,19 @@ def _is_nsfw(meta, rel):
     return bool(NSFW_NAME.search(rel))
 
 
+def _valid_safetensors(path):
+    """Отсекает битые/недокачанные файлы (например, HTML-страницу вместо модели)."""
+    try:
+        if os.path.getsize(path) < 1024 * 1024:
+            return False
+        with open(path, "rb") as f:
+            head = f.read(9)
+        n = int.from_bytes(head[:8], "little")
+        return 0 < n < 100 * 1024 * 1024 and head[8:9] == b"{"
+    except Exception:
+        return False
+
+
 def lora_catalog():
     """-> list(dict(rel, stem, family, category, nsfw, trained, name, src))"""
     import folder_paths
@@ -71,6 +84,9 @@ def lora_catalog():
             for rel in folder_paths.get_filename_list("loras"):
                 path = folder_paths.get_full_path("loras", rel)
                 if not path or not os.path.isfile(path):
+                    continue
+                if not _valid_safetensors(path):
+                    print(f"[LoraRandom] пропускаю битый файл: {rel}")
                     continue
                 stem = os.path.splitext(os.path.basename(rel.replace("\\", "/")))[0]
                 meta = None
