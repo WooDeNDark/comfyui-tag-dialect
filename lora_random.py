@@ -29,8 +29,19 @@ BODY_RE = re.compile(r"\b(body ?type|body shape|hourglass|curvy|thick|thighs|hip
 ACT_RE = re.compile(r"\b(sex|blowjob|fellatio|paizuri|titjob|handjob|footjob|penetration|missionary|cowgirl|doggystyle|"
                     r"hetero|couple|threesome|size difference|giant ?dom|creampie|cum explosion|knotting|prone ?bone|mating press|"
                     r"reverse cowgirl|spooning|piledriver|full nelson|amazon position|69|scissoring|tribadism|cunnilingus)\b", re.I)
-MALE_RE = re.compile(r"\b(penis|penises|knot|knotted|knotting|blowjob|fellatio|1boy|male|dick|cock|semen|testicles|"
-                     r"cum|giant male)\b", re.I)
+# мужская анатомия — по словам из имени и trigger words; тег страницы «male» у стилей/одежды ничего не значит
+MALE_RE = re.compile(r"\b(penis|penises|knot|knotted|knotting|blowjob|fellatio|1boy|dick|cock|semen|testicles|"
+                     r"cum|giant male|male)\b", re.I)
+ANAT_RE = re.compile(r"\b(penis|penises|knotted|knotting|blowjob|fellatio|dick|cock|testicles|semen)\b", re.I)
+
+
+def _is_male(meta, rel, role):
+    m = meta or {}
+    name_trig = " ".join([rel, m.get("name") or "", " ".join(m.get("trained") or [])])
+    if role in ("style", "detail", "clothing", "character"):
+        return bool(ANAT_RE.search(name_trig))
+    tags = set(m.get("tags") or [])
+    return bool(MALE_RE.search(name_trig) or tags & {"penis", "blowjob", "fellatio", "knotting", "cum"})
 NSFW_NAME = re.compile(r"nsfw|sexy|lingerie|underwear|nude|lewd|nylon|stocking|slingshot|(?:^|[_\W])ass(?:[_\W]|$)|"
                        r"bodystocking|chastity|bdsm|bunnysuit|bikini|porn|penis|pussy|cum", re.I)
 NSFW_TAGS = {"nsfw", "sexy", "lingerie", "underwear", "nude", "nudity", "lewd", "fetish", "hentai", "porn", "erotic", "sex"}
@@ -79,7 +90,8 @@ def _role(meta, rel):
     p = rel.lower().replace("\\", "/")
     if re.search(r"detail(?!ed)|enhanc", p):
         return "detail"
-    for c, words in (("clothing", ("clothing", "bodysuit")), ("style", ("style",)), ("concept", ("concept", "sexy"))):
+    for c, words in (("character", ("character",)), ("act", ("sex",)), ("body", ("body",)),
+                     ("clothing", ("clothing", "bodysuit")), ("style", ("style",)), ("concept", ("concept", "sexy"))):
         if any(f"/{w}/" in f"/{p}" for w in words):
             return c
     return "other"
@@ -133,7 +145,7 @@ def lora_catalog():
                     "rel": rel, "stem": stem,
                     "family": family_of(m.get("base")) if m else family_from_path(rel),
                     "role": _role(m, rel), "nsfw": _is_nsfw(m, rel),
-                    "male": bool(MALE_RE.search(_text_of(m, rel))),
+                    "male": _is_male(m, rel, _role(m, rel)),
                     "trained": (m.get("trained") or []) if m else [],
                     "name": m.get("name") if m else stem, "src": "Civitai" if m else "папка/имя",
                 })
