@@ -17,6 +17,23 @@ Hashes and Civitai answers are cached in `cache.json` next to the node. Set `CIV
 Adds 0..`max_loras` random LoRAs compatible with the current checkpoint (Civitai base model by SHA256, folder name as fallback),
 with their trigger words, as `<lora:name:weight>` tags for LoraTagLoader. NSFW LoRAs are used only when the prompt is NSFW (`auto`).
 
+The folder `loras/<family>/<role>/` sets the role (`detail`, `style`, `clothing`, `body`, `sex`, `concept`, `character`) and wins over Civitai tags.
+Each role has its own weight range. The weight recommended on Civitai (author's description, then sample images) can only lower the upper bound.
+
+### Hint file for a LoRA
+
+Put `<lora>.txt` next to the LoRA, for example when it is not on Civitai. All lines are optional and override Civitai data:
+
+```
+trigger: tag one, tag two
+role: style
+weight: 0.5-0.7
+nsfw: yes
+male: no
+```
+
+A line without a key is treated as trigger words.
+
 ## Quality tags
 
 Tag Dialect Switch also prepends family-specific quality tags (Illustrious/NoobAI, Pony score tags, SDXL, Anima) and appends their negative pair.

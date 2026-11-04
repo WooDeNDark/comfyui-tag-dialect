@@ -1,6 +1,7 @@
 """Случайные LoRA, совместимые с текущим чекпоинтом (до 10 за генерацию).
 
-Для каждой LoRA: SHA256 -> Civitai (база, теги, trigger words, nsfw), иначе — по папке/имени файла.
+Для каждой LoRA: SHA256 -> Civitai (база, теги, trigger words, nsfw, рекомендованный вес), иначе — по папке/имени
+файла. Файл-подсказка <lora>.txt рядом с LoRA дополняет или заменяет эти данные (см. _read_hint).
 Защита от конфликтов:
   * квоты по ролям (style/clothing/body/act/concept/detail/other);
   * выбранная LoRA заменяет соответствующий слот конструктора (тег слота вычёркивается из промпта);
@@ -70,8 +71,69 @@ def _text_of(meta, rel):
     return " ".join([rel, m.get("name") or "", " ".join(m.get("tags") or []), " ".join(m.get("trained") or [])])
 
 
+FOLDER_ROLES = {"detail": "detail", "style": "style", "clothing": "clothing", "body": "body", "sex": "act",
+                "concept": "concept", "character": "character"}
+HINT_KEYS = {"trigger": "trained", "triggers": "trained", "триггер": "trained", "триггеры": "trained",
+             "role": "role", "роль": "role", "weight": "weight", "вес": "weight",
+             "nsfw": "nsfw", "male": "male"}
+
+
+def _read_hint(path):
+    """<lora>.txt рядом с файлом LoRA. Формат — строки «ключ: значение», все необязательны:
+        trigger: tag one, tag two
+        role: style          (style, clothing, body, act, concept, detail, other, character)
+        weight: 0.5-0.7      (или одно число)
+        nsfw: yes            (yes/no)
+        male: no             (yes/no)
+    Строка без ключа считается trigger words."""
+    side = os.path.splitext(path)[0] + ".txt"
+    if not os.path.isfile(side):
+        return {}
+    raw = open(side, "rb").read()
+    for enc in ("utf-8-sig", "cp1251"):
+        try:
+            text = raw.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    out, words = {}, []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        k, sep, v = line.partition(":")
+        key = HINT_KEYS.get(k.strip().lower()) if sep else None
+        v = v.strip()
+        if key is None:
+            words.append(line)
+        elif key == "trained":
+            words.append(v)
+        elif key == "role":
+            out["role"] = v.lower()
+        elif key == "weight":
+            nums = sorted(float(x) for x in re.findall(r"\d+(?:[.,]\d+)?", v.replace(",", ".")))
+            if nums:
+                out["rec"] = {"lo": nums[0], "hi": nums[-1], "src": "подсказка"}
+        else:
+            out[key] = v.lower() in ("yes", "true", "1", "да")
+    if words:
+        out["trained"] = words
+    return out
+
+
+def _folder_role(rel):
+    """Папка loras/<семейство>/<роль>/ разобрана вручную, поэтому важнее тегов Civitai."""
+    for part in rel.lower().replace("\\", "/").split("/")[:-1]:
+        if part in FOLDER_ROLES:
+            return FOLDER_ROLES[part]
+    return None
+
+
 def _role(meta, rel):
     """Роль LoRA: style / clothing / body / act / concept / detail / other / character."""
+    by_folder = _folder_role(rel)
+    if by_folder:
+        return by_folder
     tags = set((meta or {}).get("tags") or [])
     txt = _text_of(meta, rel)
     if tags & CAT_WORDS["character"]:
@@ -141,12 +203,15 @@ def lora_catalog():
                 except Exception as e:
                     print(f"[LoraRandom] {rel}: {e}")
                 m = meta if (meta and meta.get("found")) else None
+                hint = _read_hint(path)
+                role = hint.get("role") or _role(m, rel)
                 out.append({
                     "rel": rel, "stem": stem,
                     "family": family_of(m.get("base")) if m else family_from_path(rel),
-                    "role": _role(m, rel), "nsfw": _is_nsfw(m, rel),
-                    "male": _is_male(m, rel, _role(m, rel)),
-                    "trained": (m.get("trained") or []) if m else [],
+                    "role": role, "nsfw": hint.get("nsfw", _is_nsfw(m, rel)),
+                    "male": hint.get("male", _is_male(m, rel, role)),
+                    "trained": hint.get("trained") or ((m.get("trained") or []) if m else []),
+                    "rec": hint.get("rec") or (m.get("rec") if m else None),
                     "name": m.get("name") if m else stem, "src": "Civitai" if m else "папка/имя",
                 })
         finally:
@@ -157,11 +222,44 @@ def lora_catalog():
     return out
 
 
+def _weight_range(l, wr):
+    """Диапазон веса: роль + рекомендация. Подсказка <lora>.txt решает сама; рекомендация с Civitai только
+    понижает верхнюю границу, потому что сильные LoRA в связке пережигают картинку."""
+    lo, hi = sorted(wr.get(l["role"], wr.get("other", [0.5, 0.8]))[:2])
+    rec = l.get("rec")
+    if rec and rec.get("src") == "подсказка":
+        return rec["lo"], rec["hi"]
+    if rec and rec["hi"] < hi:
+        hi = rec["hi"]
+        lo = min(lo, max(rec["lo"], hi * 0.7))
+    return lo, hi
+
+
+def _split_outside_parens(s):
+    parts, depth, cur = [], 0, ""
+    for ch in s:
+        depth += (ch == "(") - (ch == ")")
+        if ch == "," and depth <= 0:
+            parts.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    return parts + [cur]
+
+
 def _triggers(words, limit=2):
+    """Trigger words для промпта. Авторы пишут туда что угодно, поэтому отбрасываем:
+    чужие теги <lora:…> (они подгрузили бы LoRA второй раз с весом 1) и фразы со скобками, которые
+    не закрыты или содержат запятую. Скобки в обычных тегах экранируем: иначе ComfyUI считает их весом."""
     clean = []
     for w in words:
-        for t in w.split(","):
-            t = t.strip().strip("()")
+        for t in _split_outside_parens(re.sub(r"<[^>]*>", "", w)):
+            t = t.strip()
+            if not t or t.count("(") != t.count(")") or ("," in t):
+                continue
+            if t.startswith("(") and t.endswith(")"):
+                t = t[1:-1].strip()
+            t = re.sub(r"(?<!\\)([()])", r"\\\1", t)
             if t and t.lower() not in [c.lower() for c in clean]:
                 clean.append(t)
     return clean[:limit]
@@ -288,8 +386,7 @@ class LoraRandomizer:
         # веса по ролям + бюджет
         ws = []
         for l in chosen:
-            lo, hi = sorted(wr.get(l["role"], wr.get("other", [0.5, 0.8]))[:2])
-            ws.append(rnd.uniform(lo, hi))
+            ws.append(rnd.uniform(*_weight_range(l, wr)))
         main = sum(w for l, w in zip(chosen, ws) if l["role"] != "detail")
         scale = weight_budget / main if main > weight_budget else 1.0
         ws = [round(w * (scale if l["role"] != "detail" else 1.0), 2) for l, w in zip(chosen, ws)]
@@ -308,7 +405,10 @@ class LoraRandomizer:
             t = _triggers(l["trained"]) if add_triggers else []
             trig += t
             tags.append(f"<lora:{l['stem']}:{w}>")
-            lines.append(f"{l['stem']} ×{w} [{l['role']}{', ♂' if l['male'] else ''}, {l['family']}]" + (f" + {', '.join(t)}" if t else ""))
+            rec = l.get("rec")
+            lines.append(f"{l['stem']} ×{w} [{l['role']}{', ♂' if l['male'] else ''}, {l['family']}]"
+                         + (f" (реком. {rec['lo']}–{rec['hi']}, {rec['src']})" if rec else "")
+                         + (f" + {', '.join(t)}" if t else ""))
         out = _join(out, *trig)
         if tags:
             out += " " + " ".join(tags)

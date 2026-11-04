@@ -13,6 +13,7 @@ import urllib.error
 import urllib.request
 
 CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache.json")
+CACHE_V = 3                           # при смене формата записи Civitai запрашиваются заново
 NOTFOUND_TTL = 7 * 24 * 3600          # «нет на Civitai» перепроверяем раз в неделю
 E621_BASES = ("pony", "noobai")         # базы, которые учили на e621
 FURRY_TAGS = {"furry", "anthro", "anthropomorphic", "e621", "yiff", "furry art", "furries"}
@@ -100,16 +101,74 @@ def _get_json(url):
         return json.loads(r.read().decode("utf-8"))
 
 
+_WEIGHT_RE = re.compile(r"(?:strength|weight|вес|сила)[^0-9\n]{0,24}(\d(?:[.,]\d+)?)(?!\d)"
+                        r"(?:\s*(?:-|–|—|~|to|до)\s*(\d(?:[.,]\d+)?)(?!\d))?", re.I)
+_LORA_TAG_RE = re.compile(r"<lora:[^:>]+:(\d(?:\.\d+)?)", re.I)
+
+
+def _weight_ok(w):
+    return 0.1 <= w <= 1.5
+
+
+def _weights_from_text(html):
+    """Вес из описания автора: «weight 0.6-0.8», «strength: 0.7», «вес 0,5»."""
+    txt = re.sub(r"<[^>]+>", " ", html or "")
+    for m in _WEIGHT_RE.finditer(txt):
+        lo = float(m.group(1).replace(",", "."))
+        hi = float(m.group(2).replace(",", ".")) if m.group(2) else lo
+        lo, hi = sorted((lo, hi))
+        if _weight_ok(lo) and _weight_ok(hi):
+            return lo, hi
+    return None
+
+
+def _weights_from_images(version):
+    """Веса, с которыми автор сделал примеры этой версии (берём только однозначные случаи)."""
+    out = []
+    for im in version.get("images") or []:
+        meta = im.get("meta") if isinstance(im, dict) else None
+        if not isinstance(meta, dict):
+            continue
+        res = [r for r in (meta.get("civitaiResources") or []) if isinstance(r, dict)]
+        hit = [r.get("weight") for r in res if r.get("modelVersionId") == version.get("id")]
+        if not hit:
+            loras = [r for r in (meta.get("resources") or []) if isinstance(r, dict) and r.get("type") == "lora"]
+            hit = [r.get("weight") for r in loras] if len(loras) == 1 else []
+        if not hit:
+            tags = _LORA_TAG_RE.findall(str(meta.get("prompt") or ""))
+            hit = tags if len(tags) == 1 else []
+        for w in hit:
+            try:
+                w = float(w)
+            except (TypeError, ValueError):
+                continue
+            if _weight_ok(w):
+                out.append(w)
+    return sorted(out)
+
+
+def recommended_weight(version, descriptions):
+    """-> {"lo", "hi", "src"} или None: сначала слова автора, потом примеры (нужно минимум 2)."""
+    for html in descriptions:
+        got = _weights_from_text(html)
+        if got:
+            return {"lo": got[0], "hi": got[1], "src": "описание"}
+    ws = _weights_from_images(version)
+    if len(ws) >= 2:
+        return {"lo": ws[0], "hi": ws[-1], "src": f"примеры ({len(ws)})"}
+    return None
+
+
 def civitai_lookup(sha, cache):
-    """-> dict(found, base, tags, name, trained, nsfw, type) или None, если сеть недоступна."""
+    """-> dict(found, base, tags, name, trained, nsfw, type, rec) или None, если сеть недоступна."""
     c = cache["civitai"].get(sha)
-    if c and c.get("v") == 2 and (c.get("found") or time.time() - c.get("ts", 0) < NOTFOUND_TTL):
+    if c and c.get("v") == CACHE_V and (c.get("found") or time.time() - c.get("ts", 0) < NOTFOUND_TTL):
         return c
     try:
         v = _get_json(f"https://civitai.com/api/v1/model-versions/by-hash/{sha}")
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            c = {"v": 2, "found": False, "ts": time.time()}
+            c = {"v": CACHE_V, "found": False, "ts": time.time()}
             cache["civitai"][sha] = c
             return c
         print(f"[TagDialect] Civitai HTTP {e.code}")
@@ -118,7 +177,7 @@ def civitai_lookup(sha, cache):
         print(f"[TagDialect] Civitai недоступен: {e}")
         return c if c else None
     vm = v.get("model") or {}
-    tags, name, nsfw, mtype = [], vm.get("name", ""), bool(vm.get("nsfw")), vm.get("type", "")
+    tags, name, nsfw, mtype, mdesc = [], vm.get("name", ""), bool(vm.get("nsfw")), vm.get("type", ""), ""
     if v.get("modelId"):
         try:
             m = _get_json(f"https://civitai.com/api/v1/models/{v['modelId']}")
@@ -126,11 +185,12 @@ def civitai_lookup(sha, cache):
             name = m.get("name") or name
             nsfw = bool(m.get("nsfw", nsfw))
             mtype = m.get("type") or mtype
+            mdesc = m.get("description") or ""
         except Exception as e:
             print(f"[TagDialect] теги модели не получены: {e}")
-    c = {"v": 2, "found": True, "base": v.get("baseModel", ""), "tags": tags, "name": name,
+    c = {"v": CACHE_V, "found": True, "base": v.get("baseModel", ""), "tags": tags, "name": name,
          "trained": [w for w in (v.get("trainedWords") or []) if isinstance(w, str)],
-         "nsfw": nsfw, "type": mtype,
+         "nsfw": nsfw, "type": mtype, "rec": recommended_weight(v, [v.get("description"), mdesc]),
          "url": f"https://civitai.com/models/{v.get('modelId')}?modelVersionId={v.get('id')}", "ts": time.time()}
     cache["civitai"][sha] = c
     return c
