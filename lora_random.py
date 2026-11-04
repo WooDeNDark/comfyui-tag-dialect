@@ -23,11 +23,12 @@ CAT_WORDS = {
     "style": {"style", "art style", "artstyle", "artist", "styles"},
     "clothing": {"clothing", "outfit", "costume", "dress", "lingerie", "underwear", "bodysuit", "uniform", "swimsuit"},
     "concept": {"concept", "concepts", "poses", "pose", "action", "body", "gesture", "body type"},
-    "detail": {"tool", "tools", "detail", "details", "enhancer", "slider", "quality"},
+    "detail": {"tool", "tools", "detail", "details", "enhancer", "slider", "quality", "contrast"},
 }
 BODY_RE = re.compile(r"\b(body ?type|body shape|hourglass|curvy|thick|thighs|hips|long legs|breasts?|figure|chubby|muscular)\b", re.I)
 ACT_RE = re.compile(r"\b(sex|blowjob|fellatio|paizuri|titjob|handjob|footjob|penetration|missionary|cowgirl|doggystyle|"
-                    r"hetero|couple|threesome|size difference|giant ?dom|creampie|cum explosion|knotting)\b", re.I)
+                    r"hetero|couple|threesome|size difference|giant ?dom|creampie|cum explosion|knotting|prone ?bone|mating press|"
+                    r"reverse cowgirl|spooning|piledriver|full nelson|amazon position|69|scissoring|tribadism|cunnilingus)\b", re.I)
 MALE_RE = re.compile(r"\b(penis|penises|knot|knotted|knotting|blowjob|fellatio|1boy|male|dick|cock|semen|testicles|"
                      r"cum|giant male)\b", re.I)
 NSFW_NAME = re.compile(r"nsfw|sexy|lingerie|underwear|nude|lewd|nylon|stocking|slingshot|(?:^|[_\W])ass(?:[_\W]|$)|"
@@ -64,11 +65,13 @@ def _role(meta, rel):
     txt = _text_of(meta, rel)
     if tags & CAT_WORDS["character"]:
         return "character"
-    if ACT_RE.search(txt) and (tags & {"nsfw", "sex", "sexual", "concept", "concepts"} or not tags):
-        return "act"
-    for c in ("style", "clothing", "detail"):
+    for c in ("detail", "style"):
         if tags & CAT_WORDS[c]:
             return c
+    if ACT_RE.search(txt) and (tags & {"nsfw", "sex", "sexual", "concept", "concepts"} or not tags):
+        return "act"
+    if tags & CAT_WORDS["clothing"]:
+        return "clothing"
     if BODY_RE.search(txt) or tags & {"body", "body type"}:
         return "body"
     if tags & CAT_WORDS["concept"]:
