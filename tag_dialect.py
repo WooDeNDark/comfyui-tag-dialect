@@ -6,6 +6,7 @@
 import hashlib
 import json
 import os
+import random
 import re
 import threading
 import time
@@ -301,6 +302,22 @@ def composition(text):
     return solo, multi, male
 
 
+COMP_VARIANTS = (("solo",), ("duo", "female/female"), ("duo", "male/female"), ("trio",), ("group",),
+                 ("2girls",), ("1boy", "1girl"), ("3girls",), ("multiple girls",))
+
+
+def single_composition(text):
+    """Оставляет один состав, если слот выбрал несколько: ErePromptRandomizer хранит число активных тегов."""
+    parts = [t.strip() for t in (text or "").split(",") if t.strip()]
+    low = {t.lower() for t in parts}
+    found = [v for v in COMP_VARIANTS if all(t in low for t in v)]
+    if len(found) < 2:
+        return text
+    keep = random.Random(text).choice(found)
+    drop = {t for v in found for t in v} - set(keep)
+    return _join(", ".join(t for t in parts if t.lower() not in drop))
+
+
 # Мужской персонаж соло и male/male не нужны никогда; при solo — запрещаем второго персонажа
 COMP_NEG_ALWAYS = "male/male, male focus, yaoi, 2boys, multiple boys, bara"
 COMP_NEG_SOLO = "duo, trio, group, 1boy, male, 2girls, multiple girls"
@@ -371,7 +388,7 @@ class TagDialectSwitch:
     def run(self, ckpt_name, mode, fallback_regex, add_quality=True, composition_negative=True,
             e621_text=None, danbooru_text=None, negative_text=None):
         d, info, fam = decide(ckpt_name, mode, fallback_regex)
-        text = (e621_text if d == "e621" else danbooru_text) or ""
+        text = single_composition((e621_text if d == "e621" else danbooru_text) or "")
         neg = negative_text or ""
         if add_quality:
             q = QUALITY_POS.get(fam, QUALITY_POS["other"]).format(

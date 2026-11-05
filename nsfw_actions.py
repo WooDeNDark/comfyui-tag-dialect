@@ -1,7 +1,8 @@
 """Действие, откровенная поза, одежда и эмоция для режима NSFW: под состав и словарь из actions.json.
 
-В режиме SFW промпт не меняется. Сцену, заданную act-LoRA, и одежду, заданную clothing-LoRA, нода не трогает.
+В режиме SFW промпт не меняется. Сцену, заданную act-LoRA, и одежду, заданную clothing-LoRA, нода не подменяет.
 Выбранный вариант вычёркивает тег обычного слота: иначе в промпте будут две разные позы или два наряда.
+Сцена из действия или act-LoRA убирает обычную позу и кадры, где сцены не видно.
 """
 import json
 import os
@@ -16,6 +17,7 @@ LORA_TAG_RE = re.compile(r"\s*<lora:[^>]+>")
 ACT_LORA_RE = re.compile(r"\[act\b")
 GROUP_RE = re.compile(r"(^|,)\s*(trio|group|3girls|multiple girls)\s*(,|$)", re.I)
 CLOTHING_LORA_RE = re.compile(r"\[clothing\b")
+NARROW_FRAMES = ("portrait", "headshot portrait", "three-quarter portrait", "close-up", "upper body")
 # (имя, пул, слоты, заголовок, множитель к extras_chance). Маленькие пулы срабатывают реже,
 # иначе половина картинок попадёт в пару одинаковых локаций и ракурсов.
 EXTRAS = (("clothing", "nsfw_clothing", ["Одежда"], "Одежда", 1.0),
@@ -91,18 +93,29 @@ class NsfwActionPicker:
             body = _join(body, tag)
             return f"; убрано: {', '.join(removed)}" if removed else ""
 
+        def clear_scene(prefixes):
+            """Убирает позу слота и кадр, в который сцена не поместится."""
+            nonlocal body
+            frames = [t for t in _slot_tags(prompt, ["Кадр"]) if t.lower() in NARROW_FRAMES]
+            body, removed = _remove_tags(body, _slot_tags(prompt, prefixes) + frames)
+            return f"; убрано: {', '.join(removed)}" if removed else ""
+
         key = pool_key(body)
         pool = pools.get(key or "", [])
+        prefixes = [p.strip() for p in pose_slots.split(",") if p.strip()]
         if ACT_LORA_RE.search(lora_info):
-            notes.append("Действие: задаёт act-LoRA")
+            removed = clear_scene(prefixes)
+            body = _join(body, "sex")
+            notes.append("Действие: задаёт act-LoRA" + removed)
         elif not pool:
             notes.append("Действие: нет, состав не указан")
         elif rnd.random() >= chance:
             notes.append("Действие: нет, оставлена поза слота")
         else:
             action = rnd.choice(pool)
-            prefixes = [p.strip() for p in pose_slots.split(",") if p.strip()]
-            notes.append(f"Действие [{key}]: {action}" + swap(prefixes, action))
+            removed = clear_scene(prefixes)
+            body = _join(body, action)
+            notes.append(f"Действие [{key}]: {action}" + removed)
 
         for name, pool_name, slots, title, rate in EXTRAS:
             extra = pools.get(pool_name) or []

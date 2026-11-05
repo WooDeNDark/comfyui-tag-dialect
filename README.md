@@ -38,6 +38,14 @@ A line without a key is treated as trigger words.
 
 Adds an action or an explicit pose that fits the composition (`solo`, `pair_mf`, `pair_ff`, `group`) and the dialect. Pools live in `actions.json`, edit that file to change them. It can also swap the clothing and expression slots for explicit variants (`extras_chance`). A chosen tag removes the tag of the regular slot. The prompt stays unchanged in SFW mode; an `act` LoRA keeps its scene and a `clothing` LoRA keeps its outfit.
 
+## Slot Extras
+
+A constructor slot picks one tag. This node adds compatible tags from other groups of the same slot: hands and legs to a pose, furniture to a room, accessories to an outfit. Groups live in `slot_groups.json`: tags of one `axis` exclude each other, `requires` and `forbids` set the rules, including rules between slots. A slot whose tag was removed by a LoRA or by NSFW Action Picker is not extended.
+
+`chance` is the probability of each added tag, `max_per_slot` and `max_total` limit their number. The node also matches fur, scales, feathers and skin from the coat slot to the species.
+
+Place it after NSFW Action Picker. Keep exactly one active tag in each randomizer slot: the number of active tags is preserved between seeds.
+
 ## Quality tags
 
 Tag Dialect Switch also prepends family-specific quality tags (Illustrious/NoobAI, Pony score tags, SDXL, Anima) and appends their negative pair.

@@ -1,0 +1,164 @@
+{
+  "e621": {
+    "slots": {
+      "Поза": [
+        {"name": "upright", "axis": "posture", "tags": ["standing", "leaning forward", "stretching", "against wall", "against tree"]},
+        {"name": "seated", "axis": "posture", "tags": ["sitting", "sitting on chair", "sitting on ground", "sitting on bed", "sitting on sofa", "wariza", "seiza", "crouching", "kneeling"]},
+        {"name": "lying", "axis": "posture", "tags": ["lying on back", "lying on side", "lying", "lying on bed", "lying on sofa"]},
+        {"name": "moving", "axis": "posture", "tags": ["walking", "running", "jumping", "flying", "swimming", "floating", "dancing"]},
+        {"name": "hands", "axis": "arms", "tags": ["hand on hip", "hands on hips", "crossed arms", "hands behind head", "hand on chin", "hand on leg", "hand on head", "hand on thigh", "hand on chest"], "requires": ["upright", "seated", "lying"]},
+        {"name": "wave", "axis": "arms", "tags": ["waving"], "requires": ["upright", "seated", "moving"]},
+        {"name": "activity", "axis": "arms", "tags": ["eating", "drinking", "reading", "smoking"], "requires": ["upright", "seated", "lying"], "forbids": ["moving"]},
+        {"name": "legs_seated", "axis": "legs", "tags": ["crossed legs"], "requires": ["seated", "lying", "upright"]},
+        {"name": "legs_up", "axis": "legs", "tags": ["one leg up", "tiptoes"], "requires": ["upright"]},
+        {"name": "turn", "axis": "turn", "tags": ["looking back"], "requires": ["upright", "seated", "moving"]}
+      ],
+      "Окружение": [
+        {"name": "nature", "axis": "place", "tags": ["forest", "beach", "mountain", "snow", "desert", "field", "park", "lake", "garden", "waterfall", "river", "jungle", "swamp", "tropical", "island", "cave"]},
+        {"name": "urban", "axis": "place", "tags": ["city", "street", "rooftop", "alley", "cityscape", "pier", "ruins", "farm", "temple", "castle", "balcony", "cyberpunk", "stage"]},
+        {"name": "room", "axis": "place", "tags": ["bedroom", "kitchen", "cafe", "library", "office", "bar", "bathroom", "swimming pool", "gym", "barn", "sauna", "hot spring", "onsen", "living room", "nightclub", "hotel", "train", "car interior", "car", "spacecraft", "tent", "space"]},
+        {"name": "furniture", "axis": "detail", "tags": ["bed", "sofa", "window"], "requires": ["room"]},
+        {"name": "camp", "axis": "detail", "tags": ["campfire"], "requires": ["nature"]}
+      ],
+      "Свет": [
+        {"name": "daytime", "axis": "time", "tags": ["day", "sunrise", "sunset", "golden hour", "dusk"]},
+        {"name": "nighttime", "axis": "time", "tags": ["night"]},
+        {"name": "daysky", "axis": "sky", "tags": ["sky", "cloud", "sun", "overcast", "fog", "snowing"], "requires": ["nature", "urban"], "requires_also": ["daytime"], "forbids": ["nighttime"]},
+        {"name": "nightsky", "axis": "sky", "tags": ["starry sky", "full moon", "moon"], "requires": ["nature", "urban"], "requires_also": ["nighttime"], "forbids": ["daytime"]},
+        {"name": "daylight", "axis": "source", "tags": ["sunlight", "sunbeam"], "requires": ["daytime"], "forbids": ["nighttime"]},
+        {"name": "nightlight", "axis": "source", "tags": ["moonlight"], "requires": ["nighttime"], "forbids": ["daytime"]},
+        {"name": "anylight", "axis": "source", "tags": ["neon lights", "neon", "string lights", "christmas lights", "dim lighting", "window light", "warm lighting"]},
+        {"name": "effect", "axis": "effect", "tags": ["rim lighting", "backlighting", "dramatic lighting", "lens flare", "shadow"]}
+      ],
+      "Кадр": [
+        {"name": "framing", "axis": "framing", "tags": ["portrait", "headshot portrait", "three-quarter portrait", "full-length portrait", "close-up"]},
+        {"name": "angle", "axis": "angle", "tags": ["side view", "three-quarter view", "low-angle view", "high-angle view", "dutch angle", "rear view", "front view", "worm's-eye view", "bird's-eye view"]},
+        {"name": "gaze", "axis": "gaze", "tags": ["looking at viewer"]}
+      ],
+      "Эмоция": [
+        {"name": "good", "axis": "mood", "tags": ["smile", "grin", "smirk", "happy", "confident", "laugh", "open smile", "smug", "playful", "smug expression", "relaxed expression"]},
+        {"name": "calm", "axis": "mood", "tags": ["serious", "thoughtful expression", "neutral expression", "bored", "tired", "serious face", "evil face", "silly face"]},
+        {"name": "bad", "axis": "mood", "tags": ["surprised", "embarrassed", "pouting", "annoyed", "angry", "frown", "sad", "worried face"]},
+        {"name": "blushing", "axis": "blush", "tags": ["blush"]},
+        {"name": "mouth", "axis": "mouth", "tags": ["open mouth", "teeth", "fangs", "biting lip"]},
+        {"name": "eyelids", "axis": "eyelids", "tags": ["one eye closed", "wink", "eyes closed"], "forbids": ["bad"]},
+        {"name": "gesture", "axis": "gesture", "tags": ["v sign", "thumbs up", "waving", "pointing", "hand gesture"], "requires": ["good"]},
+        {"name": "touch", "axis": "gesture", "tags": ["hand on face", "hand on own face"]}
+      ],
+      "Волосы": [
+        {"name": "long", "axis": "length", "tags": ["long hair", "medium hair", "flowing hair"]},
+        {"name": "short", "axis": "length", "tags": ["short hair", "bob cut", "mohawk", "afro", "dreadlocks", "spiky hair"], "forbids": ["tied"]},
+        {"name": "tied", "axis": "tie", "tags": ["ponytail", "braided hair", "hair bun", "pigtails", "braided pigtails", "twin braids"]},
+        {"name": "haircolor", "axis": "hcolor", "tags": ["black hair", "brown hair", "blonde hair", "white hair", "blue hair", "red hair", "multicolored hair", "purple hair", "pink hair", "green hair", "two tone hair", "grey hair", "orange hair", "rainbow hair", "tan hair", "gradient hair", "teal hair", "striped hair"]},
+        {"name": "texture", "axis": "texture", "tags": ["messy hair", "fluffy hair", "wavy hair", "straight hair", "wet hair", "glistening hair"]},
+        {"name": "bangs", "axis": "bangs", "tags": ["hair over eye", "blunt bangs", "ahoge"]},
+        {"name": "hairacc", "axis": "hairacc", "tags": ["hair ribbon", "hair bow", "hairband", "flower in hair"]},
+        {"name": "hairfx", "axis": "hairfx", "tags": ["translucent hair", "flaming hair"], "primary_only": true}
+      ],
+      "Глаза": [
+        {"name": "eyecolor", "axis": "ecolor", "tags": ["blue eyes", "green eyes", "yellow eyes", "amber eyes", "purple eyes", "red eyes", "brown eyes", "heterochromia", "black eyes", "orange eyes", "pink eyes", "grey eyes", "teal eyes", "multicolored eyes", "two tone eyes"]},
+        {"name": "sclera", "axis": "sclera", "tags": ["black sclera", "yellow sclera", "red sclera", "white sclera", "blue sclera", "green sclera", "orange sclera", "pink sclera", "purple sclera", "no sclera", "grey sclera", "brown sclera"]},
+        {"name": "pupils", "axis": "pupils", "tags": ["slit pupils", "white pupils", "no pupils", "horizontal pupils", "heart pupils", "small pupils", "red pupils", "blue pupils", "constricted pupils", "symbol-shaped pupils", "green pupils", "yellow pupils", "star pupils", "brown pupils", "purple pupils", "pink pupils", "cross pupils"]},
+        {"name": "eyeshape", "axis": "eshape", "tags": ["narrowed eyes", "lidded eyes", "tired eyes", "round eyes", "beady eyes", "dot eyes", "ringed eyes"]},
+        {"name": "eyefx", "axis": "efx", "tags": ["glowing eyes", "sparkling eyes", "glistening eyes", "heart eyes", "star eyes", "white eyes"], "primary_only": true},
+        {"name": "eyemakeup", "axis": "emakeup", "tags": ["eyeshadow", "eyelashes"]}
+      ],
+      "Окрас": [
+        {"name": "color", "axis": "color", "tags": ["white body", "black body", "grey body", "brown body", "tan body", "orange body", "red body", "blue body", "two tone body", "multicolored body", "yellow body", "green body", "purple body", "pink body", "blue feathers", "green scales", "white feathers", "blue scales", "white fur", "brown fur", "black fur", "multicolored fur", "grey fur", "blue fur", "orange fur", "tan fur", "yellow fur", "two tone fur", "purple fur", "red fur", "pink fur", "green fur", "blue skin", "green skin", "tan skin", "light skin", "dark skin", "white skin", "red scales", "red skin", "grey skin", "black scales", "multicolored scales", "white scales", "brown skin", "purple skin", "black skin", "pink skin", "yellow feathers", "yellow scales", "black feathers", "purple scales", "grey scales", "two tone scales", "multicolored skin", "yellow skin", "brown feathers", "orange scales", "grey feathers", "tan scales", "multicolored feathers", "red feathers", "purple feathers", "brown scales", "orange skin", "two tone skin", "pale skin", "pink scales", "green feathers", "teal body", "orange feathers", "pink feathers", "two tone feathers", "tan feathers", "teal fur", "rainbow body", "magenta body", "gold scales"]},
+        {"name": "pattern", "axis": "pattern", "tags": ["spots", "stripes", "striped body", "spotted body", "striped fur", "spotted fur", "black stripes", "black spots", "brown stripes", "brown spots", "leopard spots", "blue stripes", "cheek spots", "white stripes", "white spots", "red stripes", "purple stripes", "blue spots", "striped scales", "grey stripes", "grey spots", "spotted scales", "orange stripes", "yellow stripes", "green stripes", "spotted skin", "striped skin", "pink stripes", "green spots", "purple spots", "pink spots"]},
+        {"name": "countershading", "axis": "counter", "tags": ["countershading", "white countershading", "tan countershading", "grey countershading", "yellow countershading", "reverse countershading", "blue countershading", "brown countershading", "black countershading", "pink countershading", "red countershading", "green countershading"]},
+        {"name": "surface", "axis": "surface", "tags": ["glistening body", "glistening skin", "wet body", "translucent body", "sweaty body", "wet fur", "metallic body", "glistening fur", "glowing body", "detailed fur", "glistening scales", "mottled body", "tufted fur", "gradient fur", "smooth skin", "short fur", "fluffy fur", "glowing fur", "mottled fur"]}
+      ],
+      "Особенности": [
+        {"name": "markings", "axis": "markings", "tags": ["tail markings", "chest tuft", "freckles", "tattoo", "leg markings", "head markings", "facial markings", "ear markings", "striped markings", "fur markings", "black markings", "spotted markings", "blue markings", "white markings", "red markings", "arm markings", "yellow markings", "brown markings", "glowing markings", "eye markings", "purple markings", "green markings", "tribal markings", "chest markings", "orange markings", "thigh markings", "forehead markings", "pink markings", "grey markings", "back markings", "whisker markings", "cheek markings", "snout markings", "shoulder markings", "tan markings", "belly markings", "neck markings", "golden markings", "hip markings", "multicolored markings", "freckled face"]},
+        {"name": "ears", "axis": "ears", "tags": ["pointy ears", "long ears", "floppy ears", "multicolored ears", "dipstick ears", "pivoted ears", "prick ears", "black ears", "pink inner ear", "notched ear", "brown ears", "white ears", "white inner ear", "blue ears", "lop ears", "grey ears", "fluffy ears", "tan inner ear", "two tone ears", "pink ears", "yellow ears", "orange ears", "round ears", "tan ears", "blue inner ear", "purple ears", "yellow inner ear", "folded ears", "red ears", "black inner ear", "green ears", "grey inner ear", "brown inner ear", "purple inner ear", "red inner ear", "green inner ear", "orange inner ear", "striped ears", "small ears", "short ears", "light ears", "dark ears"]},
+        {"name": "tail", "axis": "tail", "tags": ["fluffy tail", "dipstick tail", "long tail", "short tail", "multicolored tail", "striped tail", "thick tail", "white tail", "two tone tail", "black tail", "brown tail", "blue tail", "spade tail", "grey tail", "yellow tail", "pink tail", "orange tail", "spiked tail", "purple tail", "red tail", "tan tail", "green tail", "ringed tail", "small tail", "flaming tail", "white tail tip", "rainbow tail", "tapering tail", "spotted tail", "thin tail", "forked tail", "glistening tail", "black tail tip", "leaf tail", "cleft tail", "nub tail", "brown tail tip", "pointed tail", "tan tail tip", "stinger tail", "blue tail tip", "heart tail", "curved tail", "light tail", "orange tail tip"]},
+        {"name": "face", "axis": "face", "tags": ["white face", "two tone face", "multicolored face", "tan face", "glistening face", "spotted face", "brown face", "grey face", "black face", "blue face", "striped face", "orange face", "yellow face", "green face", "red face", "pink face"]},
+        {"name": "horns", "axis": "horns", "tags": ["white horn", "black horn", "curved horn", "unicorn horn", "facial horn", "blue horn", "nose horn", "red horn", "yellow horn", "bovid horn", "grey horn", "broken horn", "caprine horn", "brown horn", "head horn", "purple horn", "pink horn", "ram horn", "small horn", "glowing horn", "orange horn", "multicolored horn", "green horn", "tan horn", "long horn", "striped horn", "ridged horn", "short horn", "smooth horn", "bovine horn", "two tone horn", "sharp horn"], "primary_only": true},
+        {"name": "wings", "axis": "wings", "tags": ["feathered wings", "membranous wings", "insect wings", "bat wings", "blue wings", "black wings", "white wings", "head wings", "folded wings", "red wings", "purple wings", "small wings", "lepidopteran wings", "yellow wings", "grey wings", "multicolored wings", "two tone wings", "green wings", "orange wings", "brown wings", "pink wings", "dragon wings", "translucent wings"], "primary_only": true}
+      ],
+      "Одежда": [
+        {"name": "top", "axis": "top", "tags": ["t-shirt", "turtleneck", "tank top", "shirt", "crop top", "apron", "dress shirt", "sleeveless shirt", "aloha shirt", "blouse", "long sleeve shirt", "white shirt", "black shirt", "collared shirt", "blue shirt", "red shirt", "green shirt", "pattern shirt", "pink shirt", "grey shirt", "purple shirt", "yellow shirt", "black tank top", "striped shirt", "white tank top", "orange shirt", "multicolored shirt", "print shirt", "black t-shirt", "brown shirt", "white t-shirt", "shirt collar", "two tone shirt", "black crop top", "white dress shirt", "blue t-shirt", "polo shirt", "print t-shirt", "maid apron", "plaid shirt", "flannel shirt", "red t-shirt", "tan shirt", "blue tank top", "oversized shirt", "white apron", "red tank top", "green t-shirt", "green apron", "white crop top"], "clothed": true, "forbids": ["full"]},
+        {"name": "bottom", "axis": "bottom", "tags": ["jeans", "shorts", "pants", "skirt", "denim shorts", "gym shorts", "yoga pants", "tight shorts", "pencil skirt", "spandex shorts", "tight pants", "black pants", "blue pants", "black shorts", "blue shorts", "grey pants", "black skirt", "brown pants", "dolphin shorts", "green pants", "blue skirt", "white pants", "blue jeans", "red shorts", "red pants", "pattern pants", "pink skirt", "red skirt", "green shorts", "grey shorts", "brown shorts", "purple pants", "oversized pants", "green skirt", "white shorts", "purple skirt", "pattern skirt", "tan pants", "cargo pants", "white skirt", "purple shorts", "camo pants", "pink shorts", "leather pants"], "clothed": true, "forbids": ["full"]},
+        {"name": "full", "axis": "top", "tags": ["suit", "kimono", "armor", "overalls", "sportswear", "uniform", "dress", "robe", "tunic", "poncho", "wedding dress", "business suit", "chinese dress", "maid uniform", "red dress", "black dress", "white dress", "blue dress", "pink dress", "purple dress", "green dress", "yellow dress", "black suit", "plate armor", "blue overalls", "basketball uniform", "body armor", "multicolored dress", "power armor", "leather armor", "orange dress", "martial arts uniform", "black armor", "baseball uniform", "red robe", "strapless dress", "toga"], "clothed": true},
+        {"name": "outer", "axis": "outer", "tags": ["hoodie", "jacket", "leather jacket", "sweater", "coat", "cloak", "cape", "vest", "lab coat", "bulletproof vest", "cropped hoodie", "black jacket", "black hoodie", "blue jacket", "blue hoodie", "green sweater", "red cape", "red jacket", "red cloak", "blue sweater", "green jacket", "black vest", "suit jacket", "white jacket", "red sweater", "red hoodie", "brown jacket", "sweater vest", "green hoodie", "pink hoodie", "blue vest", "pattern sweater", "purple hoodie", "letterman jacket", "black sweater", "cropped jacket", "pink sweater", "orange sweater", "grey hoodie", "striped sweater", "green vest", "white coat", "purple jacket", "grey jacket", "black cape", "white hoodie", "purple sweater", "black coat"], "clothed": true},
+        {"name": "legwear", "axis": "legwear", "tags": ["socks", "leggings", "thigh socks", "knee socks", "long socks", "white socks", "toeless socks", "pattern socks", "striped socks", "black socks", "stirrup socks", "multicolored socks", "pattern thigh socks", "striped thigh socks", "black leggings", "pink socks", "blue socks", "black thigh socks"]},
+        {"name": "footwear", "axis": "footwear", "tags": ["boots", "high heels", "high heeled boots", "sandals", "sneakers", "thigh boots", "platform heels", "knee boots", "black boots", "black high heels", "brown boots", "white boots", "red boots", "ankle strap heels", "leather boots", "high heeled sandals", "blue boots", "red high heels", "cowboy boots", "black thigh boots"]},
+        {"name": "headwear", "axis": "headwear", "tags": ["hat", "helmet", "headband", "baseball cap", "beanie", "tiara", "wizard hat", "sun hat", "straw hat", "nurse hat", "crown", "witch hat", "santa hat", "cowboy hat", "top hat", "backwards hat", "backwards baseball cap", "black hat", "red hat", "blue hat", "green hat", "party hat", "white hat", "brown hat", "purple hat", "flower crown", "visor cap", "chef hat", "hard hat", "pink hat", "pirate hat", "yellow hat", "black beanie", "grey hat", "two tone hat"]},
+        {"name": "eyewear", "axis": "eyewear", "tags": ["glasses", "sunglasses", "round glasses", "rectangular glasses", "black glasses", "red glasses", "green glasses"]},
+        {"name": "neckwear", "axis": "neck", "tags": ["scarf", "choker", "necklace", "necktie", "bow tie", "black collar", "red collar", "black necklace", "black choker", "red scarf", "pearl necklace", "blue collar", "pink collar", "cross necklace", "gold necklace", "red necktie", "red bow tie", "neck bow", "black necktie", "purple collar", "blue scarf", "beaded necklace", "pink scarf", "blue necktie", "gold collar", "black bow tie", "green collar", "fur collar", "green scarf", "brown collar", "purple scarf"]},
+        {"name": "handwear", "axis": "hands", "tags": ["gloves", "fingerless gloves", "elbow gloves", "white gloves", "black gloves", "black elbow gloves", "boxing gloves", "red gloves", "brown gloves", "black fingerless gloves", "blue gloves", "yellow gloves", "purple gloves", "green gloves", "white elbow gloves", "pink gloves", "leather gloves", "grey gloves"]},
+        {"name": "wristwear", "axis": "wrist", "tags": ["bracelet", "spiked bracelet", "gold bracelet", "black bracelet", "studded bracelet"]},
+        {"name": "bows", "axis": "bows", "tags": ["hair tie", "tail ribbon", "centered hair bow", "tail bow", "pink bow", "red bow", "red ribbon", "ear bow", "blue bow"]},
+        {"name": "belt", "axis": "belt", "tags": ["belt", "black belt", "brown belt", "utility belt"]}
+      ],
+      "Телосложение": [
+        {"name": "thin", "axis": "size", "tags": ["slim"]},
+        {"name": "fit", "axis": "size", "tags": ["athletic", "muscular", "muscular anthro", "muscular female"]},
+        {"name": "heavy", "axis": "size", "tags": ["slightly chubby", "overweight", "overweight female"]},
+        {"name": "height", "axis": "height", "tags": ["tall"]},
+        {"name": "shape", "axis": "shape", "tags": ["curvy figure", "hourglass figure", "voluptuous", "pear-shaped figure"]},
+        {"name": "waist", "axis": "waist", "tags": ["small waist"], "forbids": ["heavy"]},
+        {"name": "detail", "axis": "detail", "tags": ["thick thighs", "wide hips", "long legs", "medium breasts"]},
+        {"name": "toned", "axis": "toned", "tags": ["abs"], "requires": ["fit"]},
+        {"name": "gap", "axis": "gap", "tags": ["thigh gap"], "requires": ["thin", "fit"]}
+      ]
+    },
+    "cover": {"default": "fur", "species": {"dragon": "scales", "western dragon": "scales", "eastern dragon": "scales", "wyvern": "scales", "lizard": "scales", "crocodile": "scales", "snake": "scales", "gecko": "scales", "kobold": "scales", "avian": "feathers", "owl": "feathers", "eagle": "feathers", "corvid": "feathers", "shark": "skin", "orca": "skin", "dolphin": "skin", "protogen": null}, "tags": {"fur": ["white fur", "brown fur", "black fur", "multicolored fur", "grey fur", "blue fur", "orange fur", "tan fur", "yellow fur", "two tone fur", "purple fur", "red fur", "pink fur", "green fur", "teal fur", "striped fur", "spotted fur", "wet fur", "glistening fur", "detailed fur", "tufted fur", "gradient fur", "short fur", "fluffy fur", "glowing fur", "mottled fur"], "scales": ["green scales", "blue scales", "red scales", "black scales", "multicolored scales", "white scales", "yellow scales", "purple scales", "grey scales", "two tone scales", "orange scales", "tan scales", "brown scales", "pink scales", "gold scales", "striped scales", "spotted scales", "glistening scales"], "feathers": ["blue feathers", "white feathers", "yellow feathers", "black feathers", "brown feathers", "grey feathers", "multicolored feathers", "red feathers", "purple feathers", "green feathers", "orange feathers", "pink feathers", "two tone feathers", "tan feathers"], "skin": ["blue skin", "green skin", "tan skin", "light skin", "dark skin", "white skin", "red skin", "grey skin", "brown skin", "purple skin", "black skin", "pink skin", "multicolored skin", "yellow skin", "orange skin", "two tone skin", "pale skin", "spotted skin", "striped skin", "glistening skin", "smooth skin"]}, "fallback": {"fur": ["white fur", "brown fur", "black fur", "multicolored fur", "grey fur", "blue fur", "orange fur", "tan fur", "yellow fur", "two tone fur", "purple fur", "red fur", "pink fur", "green fur", "teal fur"], "scales": ["green scales", "blue scales", "red scales", "black scales", "multicolored scales", "white scales", "yellow scales", "purple scales", "grey scales", "two tone scales", "orange scales", "tan scales", "brown scales", "pink scales", "gold scales"], "feathers": ["blue feathers", "white feathers", "yellow feathers", "black feathers", "brown feathers", "grey feathers", "multicolored feathers", "red feathers", "purple feathers", "green feathers", "orange feathers", "pink feathers", "two tone feathers", "tan feathers"], "skin": ["blue skin", "green skin", "tan skin", "light skin", "dark skin", "white skin", "red skin", "grey skin", "brown skin", "purple skin", "black skin", "pink skin", "multicolored skin", "yellow skin", "orange skin", "two tone skin", "pale skin"]}}
+  },
+  "danbooru": {
+    "slots": {
+      "Поза": [
+        {"name": "upright", "axis": "posture", "tags": ["standing", "leaning forward"]},
+        {"name": "seated", "axis": "posture", "tags": ["sitting", "squatting", "kneeling"]},
+        {"name": "lying", "axis": "posture", "tags": ["lying", "on side"]},
+        {"name": "moving", "axis": "posture", "tags": ["walking", "running"]},
+        {"name": "hands", "axis": "arms", "tags": ["hand on own hip", "crossed arms", "arms up", "arms behind head", "hand on own chin"], "requires": ["upright", "seated", "lying"]},
+        {"name": "wave", "axis": "arms", "tags": ["waving"], "requires": ["upright", "seated", "moving"]},
+        {"name": "turn", "axis": "turn", "tags": ["looking back"], "requires": ["upright", "seated", "moving"]}
+      ],
+      "Окружение": [
+        {"name": "nature", "axis": "place", "tags": ["forest", "beach", "mountain", "snow", "desert", "field", "park", "lake", "garden"]},
+        {"name": "urban", "axis": "place", "tags": ["city", "street", "rooftop", "alley"]},
+        {"name": "room", "axis": "place", "tags": ["bedroom", "kitchen", "cafe", "library", "office", "bar (place)", "train interior", "space"]}
+      ],
+      "Свет": [
+        {"name": "daytime", "axis": "time", "tags": ["day", "sunrise", "sunset", "evening"]},
+        {"name": "nighttime", "axis": "time", "tags": ["night"]},
+        {"name": "daylight", "axis": "source", "tags": ["sunlight", "light rays"], "requires": ["daytime"], "forbids": ["nighttime"]},
+        {"name": "nightlight", "axis": "source", "tags": ["moonlight"], "requires": ["nighttime"], "forbids": ["daytime"]},
+        {"name": "anylight", "axis": "source", "tags": ["neon lights"]},
+        {"name": "effect", "axis": "effect", "tags": ["backlighting"]},
+        {"name": "effect_primary", "axis": "effect", "tags": ["rim light", "dramatic lighting"], "primary_only": true}
+      ],
+      "Кадр": [
+        {"name": "framing", "axis": "framing", "tags": ["portrait", "upper body", "cowboy shot", "full body", "close-up"]},
+        {"name": "angle", "axis": "angle", "tags": ["from side", "from below", "from above", "dutch angle", "from behind"]}
+      ],
+      "Эмоция": [
+        {"name": "good", "axis": "mood", "tags": ["smile", "grin", "smirk", "smug", "happy", "laughing"]},
+        {"name": "calm", "axis": "mood", "tags": ["serious"]},
+        {"name": "calm_primary", "axis": "mood", "tags": ["tired"], "primary_only": true},
+        {"name": "bad", "axis": "mood", "tags": ["surprised", "embarrassed", "pout", "annoyed"]},
+        {"name": "blushing", "axis": "blush", "tags": ["blush"]},
+        {"name": "mouth", "axis": "mouth", "tags": ["open mouth"]}
+      ],
+      "Волосы": [
+        {"name": "long", "axis": "length", "tags": ["long hair"]},
+        {"name": "short", "axis": "length", "tags": ["short hair", "bob cut", "mohawk"], "forbids": ["tied"]},
+        {"name": "tied", "axis": "tie", "tags": ["ponytail", "braid", "hair bun"]},
+        {"name": "texture", "axis": "texture", "tags": ["messy hair"]},
+        {"name": "bangs", "axis": "bangs", "tags": ["hair over one eye"]}
+      ],
+      "Телосложение": [
+        {"name": "thin", "axis": "size", "tags": ["slender"]},
+        {"name": "fit", "axis": "size", "tags": ["toned", "muscular"]},
+        {"name": "heavy", "axis": "size", "tags": ["plump"]},
+        {"name": "shape", "axis": "shape", "tags": ["curvy", "wide hips"]},
+        {"name": "height", "axis": "height", "tags": ["tall"], "primary_only": true},
+        {"name": "abs", "axis": "abs", "tags": ["abs"], "requires": ["fit"]}
+      ]
+    },
+    "cover": {"default": "fur", "species": {"dragon": "scales", "lizard": "scales", "bird": "feathers", "shark": "skin"}, "tags": {"fur": ["white fur", "black fur", "grey fur", "brown fur", "orange fur", "red fur", "blue fur"], "scales": ["white scales", "black scales", "blue scales", "red scales", "green scales"], "feathers": ["white feathers", "black feathers", "blue feathers", "brown feathers", "red feathers"], "skin": ["white skin", "black skin", "grey skin", "blue skin"]}, "fallback": {"fur": ["white fur", "black fur", "grey fur", "brown fur", "orange fur", "red fur", "blue fur"], "scales": ["white scales", "black scales", "blue scales", "red scales", "green scales"], "feathers": ["white feathers", "black feathers", "blue feathers", "brown feathers", "red feathers"], "skin": ["white skin", "black skin", "grey skin", "blue skin"]}}
+  }
+}

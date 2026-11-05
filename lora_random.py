@@ -46,6 +46,8 @@ def _is_male(meta, rel, role):
 NSFW_NAME = re.compile(r"nsfw|sexy|lingerie|underwear|nude|lewd|nylon|stocking|slingshot|(?:^|[_\W])ass(?:[_\W]|$)|"
                        r"bodystocking|chastity|bdsm|bunnysuit|bikini|porn|penis|pussy|cum", re.I)
 NSFW_TAGS = {"nsfw", "sexy", "lingerie", "underwear", "nude", "nudity", "lewd", "fetish", "hentai", "porn", "erotic", "sex"}
+# Сцены, где партнёр — мужчина: при f/f и группе девушек такие LoRA спорят с негативом «1boy, male»
+ACT_NEEDS_MALE = re.compile(r"prone.?bone|doggy|missionary|blowjob|fellatio|penis|knot|mating.?press|cowgirl|paizuri", re.I)
 NSFW_PROMPT = re.compile(r"(^|,)\s*(nsfw|explicit|rating[_ ]explicit|questionable|nude)\s*(,|$)", re.I)
 ROLES = ["style", "clothing", "body", "act", "concept", "detail", "other"]
 DEF_QUOTAS = "style=1, clothing=1, body=1, act=1, concept=2, detail=2, other=1"
@@ -359,6 +361,8 @@ class LoraRandomizer:
                 skip("nsfw")
             elif l["role"] == "act" and not multi:
                 skip("нужен партнёр")
+            elif l["role"] == "act" and not male and ACT_NEEDS_MALE.search(l["rel"]):
+                skip("сцена с мужчиной")
             elif l["male"] and not male:
                 skip("мужская анатомия")
             elif excl and excl.search(l["rel"]):
