@@ -38,6 +38,17 @@ A line without a key is treated as trigger words.
 
 Adds an action or an explicit pose that fits the composition (`solo`, `pair_mf`, `pair_ff`, `group`) and the dialect. Pools live in `actions.json`, edit that file to change them. It can also swap the clothing and expression slots for explicit variants (`extras_chance`). A chosen tag removes the tag of the regular slot. The prompt stays unchanged in SFW mode; an `act` LoRA keeps its scene and a `clothing` LoRA keeps its outfit.
 
+## Prompt constructor
+
+Five nodes in a chain replace the per-tag slots: **Основа → Персонаж → Сцена → LoRA → Итог**. A plan object travels between them, and the prompt is assembled once, in the last node. All tags live in `tags.json`.
+
+- **Основа** sets the dialect, SFW or NSFW, composition and seed.
+- **Персонаж** and **Сцена** have a dropdown for each field. `случайно` lets the node pick; any other value pins the field, and the other fields adapt to it.
+- **LoRA** runs after the scene, so it sees the pins. It replaces unpinned fields of its role and leaves pinned ones alone.
+- **Итог** outputs the prompt, the negative, a report and a recipe line.
+
+Paste the recipe into **Основа** to repeat a result with any seed, and delete the fields that should change. A dropdown value overrides the recipe. Every field has its own random stream, so pinning one field keeps the others. The LoRA node can be bypassed.
+
 ## Slot Extras
 
 A constructor slot picks one tag. This node adds compatible tags from other groups of the same slot: hands and legs to a pose, furniture to a room, accessories to an outfit. Groups live in `slot_groups.json`: tags of one `axis` exclude each other, `requires` and `forbids` set the rules, including rules between slots. A slot whose tag was removed by a LoRA or by NSFW Action Picker is not extended.

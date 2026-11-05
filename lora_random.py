@@ -293,6 +293,69 @@ def _remove_tags(text, tags):
     return ", ".join(kept), removed
 
 
+def choose_loras(ck_fam, allow_nsfw, solo, multi, male, want, quota, wr, seed, max_loras, chance,
+                 weight_budget, male_preference, exclude_regex, always_include):
+    """Выбирает LoRA под чекпоинт и состав и считает веса. Роль из want вне списка не берётся."""
+    try:
+        excl = re.compile(exclude_regex, re.I) if exclude_regex.strip() else None
+    except re.error:
+        excl = None
+    pinned = {s.strip().lower() for s in always_include.split(",") if s.strip()}
+
+    cat = lora_catalog()
+    ok_fams = COMPAT.get(ck_fam, set())
+    skipped = {}
+    skip = lambda why: skipped.__setitem__(why, skipped.get(why, 0) + 1)
+    pool, chosen = [], []
+    for l in cat:
+        nsfw_hit = l["nsfw"] if l["role"] not in ("style", "detail") else bool(NSFW_NAME.search(l["rel"]))
+        if l["stem"].lower() in pinned or l["rel"].lower() in pinned:
+            chosen.append(l)
+        elif l["family"] not in ok_fams:
+            skip("семейство")
+        elif l["role"] not in want:
+            skip("роль")
+        elif nsfw_hit and not allow_nsfw:
+            skip("nsfw")
+        elif l["role"] == "act" and not multi:
+            skip("нужен партнёр")
+        elif l["role"] == "act" and not male and ACT_NEEDS_MALE.search(l["rel"]):
+            skip("сцена с мужчиной")
+        elif l["male"] and not male:
+            skip("мужская анатомия")
+        elif excl and excl.search(l["rel"]):
+            skip("исключено")
+        else:
+            pool.append(l)
+    n_ok = len(pool) + len(chosen)
+
+    rnd = random.Random(seed)
+    used = {}
+    for l in chosen:
+        used[l["role"]] = used.get(l["role"], 0) + 1
+    while len(chosen) < max_loras and pool and rnd.random() < chance:
+        cands = [l for l in pool if used.get(l["role"], 0) < quota.get(l["role"], 1)]
+        if not cands:
+            break
+        w = [male_preference if l["male"] else 1.0 for l in cands]
+        if sum(w) <= 0:
+            break
+        l = rnd.choices(cands, weights=w)[0]
+        pool.remove(l)
+        used[l["role"]] = used.get(l["role"], 0) + 1
+        chosen.append(l)
+
+    # веса по ролям + бюджет
+    ws = []
+    for l in chosen:
+        ws.append(rnd.uniform(*_weight_range(l, wr)))
+    main = sum(w for l, w in zip(chosen, ws) if l["role"] != "detail")
+    scale = weight_budget / main if main > weight_budget else 1.0
+    ws = [round(w * (scale if l["role"] != "detail" else 1.0), 2) for l, w in zip(chosen, ws)]
+    return {"chosen": chosen, "weights": ws, "main": main, "scale": scale,
+            "fit": n_ok, "skipped": skipped, "catalog": cat}
+
+
 class LoraRandomizer:
     """Добавляет к промпту до max_loras случайных LoRA, совместимых с чекпоинтом, без конфликтов со слотами."""
 
@@ -338,62 +401,10 @@ class LoraRandomizer:
         wr = {k: (v if isinstance(v, list) else [v, v]) for k, v in _parse_map(weights, num=True).items()}
         allow_nsfw = {"разрешить": True, "только SFW": False}.get(nsfw_loras, bool(NSFW_PROMPT.search(text or "")))
         solo, multi, male = composition(text)
-        try:
-            excl = re.compile(exclude_regex, re.I) if exclude_regex.strip() else None
-        except re.error:
-            excl = None
-        pinned = {s.strip().lower() for s in always_include.split(",") if s.strip()}
-
-        cat = lora_catalog()
-        ok_fams = COMPAT.get(ck_fam, set())
-        skipped = {}
-        skip = lambda why: skipped.__setitem__(why, skipped.get(why, 0) + 1)
-        pool, chosen = [], []
-        for l in cat:
-            nsfw_hit = l["nsfw"] if l["role"] not in ("style", "detail") else bool(NSFW_NAME.search(l["rel"]))
-            if l["stem"].lower() in pinned or l["rel"].lower() in pinned:
-                chosen.append(l)
-            elif l["family"] not in ok_fams:
-                skip("семейство")
-            elif l["role"] not in want:
-                skip("роль")
-            elif nsfw_hit and not allow_nsfw:
-                skip("nsfw")
-            elif l["role"] == "act" and not multi:
-                skip("нужен партнёр")
-            elif l["role"] == "act" and not male and ACT_NEEDS_MALE.search(l["rel"]):
-                skip("сцена с мужчиной")
-            elif l["male"] and not male:
-                skip("мужская анатомия")
-            elif excl and excl.search(l["rel"]):
-                skip("исключено")
-            else:
-                pool.append(l)
-        n_ok = len(pool) + len(chosen)
-
-        rnd = random.Random(seed)
-        used = {}
-        for l in chosen:
-            used[l["role"]] = used.get(l["role"], 0) + 1
-        while len(chosen) < max_loras and pool and rnd.random() < chance:
-            cands = [l for l in pool if used.get(l["role"], 0) < quota.get(l["role"], 1)]
-            if not cands:
-                break
-            w = [male_preference if l["male"] else 1.0 for l in cands]
-            if sum(w) <= 0:
-                break
-            l = rnd.choices(cands, weights=w)[0]
-            pool.remove(l)
-            used[l["role"]] = used.get(l["role"], 0) + 1
-            chosen.append(l)
-
-        # веса по ролям + бюджет
-        ws = []
-        for l in chosen:
-            ws.append(rnd.uniform(*_weight_range(l, wr)))
-        main = sum(w for l, w in zip(chosen, ws) if l["role"] != "detail")
-        scale = weight_budget / main if main > weight_budget else 1.0
-        ws = [round(w * (scale if l["role"] != "detail" else 1.0), 2) for l, w in zip(chosen, ws)]
+        pick = choose_loras(ck_fam, allow_nsfw, solo, multi, male, want, quota, wr, seed, max_loras, chance,
+                            weight_budget, male_preference, exclude_regex, always_include)
+        chosen, ws, main, scale = pick["chosen"], pick["weights"], pick["main"], pick["scale"]
+        n_ok, skipped, cat = pick["fit"], pick["skipped"], pick["catalog"]
 
         # LoRA заменяет слот конструктора
         out, replaced = text or "", []
