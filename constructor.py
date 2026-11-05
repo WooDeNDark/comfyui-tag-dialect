@@ -207,7 +207,8 @@ class PromptBase:
         return {
             "required": {
                 "ckpt_name": ("STRING", {"forceInput": True}),
-                "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF}),
+                # Явный control_after_generate: без него интерфейс принимает значения за старый формат и теряет первое
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF, "control_after_generate": True}),
                 "rating": (["NSFW", "SFW"], {"default": "NSFW"}),
                 "composition": ([RANDOM] + list(data["composition"]), {"default": RANDOM}),
                 "dialect": (["auto", "e621", "danbooru"], {"default": "auto"}),
