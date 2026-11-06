@@ -28,7 +28,7 @@ CHARACTER_FIELDS = ("Вид", "Телосложение", "Окрас", "Вол�
 # Свет зависит от места, кадр — от сцены
 SCENE_FIELDS = ("Окружение", "Свет", "Эмоция", "Стиль", "Сцена", "Кадр", "Поза", "Одежда")
 PROMPT_ORDER = ("Стиль", "Вид", "Телосложение", "Окрас", "Волосы", "Глаза", "Одежда", "Эмоция", "Поза", "Кадр",
-                "Окружение", "Свет", "Особенности", "Сцена")
+                "Окружение", "Свет", "Особенности", "Сцена", "Фон")
 RECIPE_ORDER = ("Состав",) + PROMPT_ORDER + ("LoRA",)
 NARROW_FRAMES = ("portrait", "headshot portrait", "three-quarter portrait", "close-up")
 COVER_RE = re.compile(r"\b(fur|scales|feathers|skin)\b")
@@ -185,7 +185,7 @@ def pick_location(plan, data):
         return next((l for l in locations if l["tag"] == tag), None)
     pool = [l for l in locations if available(data, plan, [l["tag"]])]
     location = rnd.choices(pool, weights=[l["weight"] for l in pool])[0]
-    set_field(plan, data, "Окружение", [location["tag"]])
+    set_field(plan, data, "Окружение", [location["tag"], "indoors" if location["inside"] else "outdoors"])
     return location
 
 
@@ -196,6 +196,20 @@ def from_location(data, plan, options):
 
 def split_tags(text):
     return [t.strip() for t in text.split(",") if t.strip()]
+
+
+def pick_ambient(plan, data):
+    """Частые у людей теги вне полей. Считаются в конце: LoRA могла снять или надеть одежду."""
+    if "Фон" in plan["pins"]:
+        return list(plan["pins"]["Фон"])
+    rnd = field_rng(plan, "Фон")
+    worn = plan["fields"].get("Одежда", {}).get("tags", [])
+    tags = []
+    for item in data["ambient"]:
+        fits = item.get("rating") in (None, plan["rating"]) and (item.get("when") != "nude" or "nude" in worn)
+        if rnd.random() < item["chance"] and fits:
+            tags.append(item["tag"])
+    return tags
 
 
 def partner_ban(data):
@@ -599,6 +613,8 @@ class PromptResult:
 
     def run(self, plan, add_quality):
         data = load_tags()
+        plan = copy.deepcopy(plan)
+        plan["fields"]["Фон"] = {"tags": pick_ambient(plan, data), "pinned": "Фон" in plan["pins"]}
         dialect, family = plan["dialect"], plan["family"]
         rating = rating_of(data, plan)
         comp = data["composition"][plan["composition"]][dialect]

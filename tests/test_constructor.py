@@ -110,6 +110,16 @@ class Coherence(unittest.TestCase):
                 lights = {t for o in table[place[0]]["lights"] for t in cn.split_tags(o)}
                 self.assertTrue(set(plan["fields"]["Свет"]["tags"]) <= lights, plan["fields"]["Свет"])
 
+    def test_anatomy_tags_only_when_nude(self):
+        for seed in range(1500):
+            p = generate(seed)
+            if "nude" not in p["plan"]["fields"]["Одежда"]["tags"]:
+                self.assertFalse({"nipples", "pussy"} & set(tags(p["clean"])), p["clean"])
+
+    def test_no_small_body_sizes_in_chest_axis(self):
+        chest = next(g for g in cn.load_tags()["fields"]["Телосложение"]["groups"] if g["name"] == "chest")
+        self.assertFalse({"small breasts", "flat chest"} & set(chest["tags"]))
+
     def test_tags_data_is_consistent(self):
         data = cn.load_tags()
         places = {t for g in data["fields"]["Окружение"]["groups"] for t in g["tags"]}
