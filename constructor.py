@@ -12,6 +12,7 @@ import json
 import os
 import random
 import re
+import time
 
 from .lora_random import (DEF_QUOTAS, DEF_WEIGHTS, ROLES, _parse_map, _triggers, choose_loras,
                           lora_catalog)
@@ -221,6 +222,19 @@ def face_prompt(plan, quality):
     for name in ("Вид", "Окрас", "Глаза", "Эмоция"):
         parts += fields.get(name, {}).get("tags", [])[:2]
     return strip_stopped(_join(*parts))[0]
+
+
+def log_run(plan, recipe):
+    """Журнал прогонов в user/default/constructor_runs.jsonl: что выбирала нода, для разбора серий."""
+    try:
+        import folder_paths
+        path = os.path.join(folder_paths.get_user_directory(), "default", "constructor_runs.jsonl")
+        row = {"time": time.strftime("%Y-%m-%d %H:%M:%S"), "seed": plan["seed"], "ckpt": plan["ckpt"],
+               "rating": plan["rating"], "dialect": plan["dialect"], "recipe": recipe}
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except (AttributeError, ImportError, OSError):
+        pass
 
 
 def partner_ban(data):
@@ -662,6 +676,7 @@ class PromptResult:
         info = "\n".join([f"Словарь: {dialect} · {family} ← {plan['why']}", f"Рейтинг: {plan['rating']}",
                           f"Состав: {plan['composition']}"] + notes)
         print(f"[Constructor] {info}")
+        log_run(plan, recipe)
         return {"ui": {"text": [info]}, "result": (text, negative, info, recipe, clean, face_prompt(plan, quality))}
 
 
