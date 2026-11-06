@@ -1,5 +1,11 @@
 # comfyui-tag-dialect
 
+Random prompt constructor for ComfyUI: coherent tag prompts for SDXL checkpoints with LoRA selection, presets per checkpoint and a floor of safety rules.
+
+## Install
+
+Clone into `custom_nodes` and restart ComfyUI. The ready workflow is in `workflows/`. It needs these node packs: rgthree-comfy, comfyui-image-saver, ComfyUI-Impact-Pack, ComfyUI-Impact-Subpack, ComfyUI_UltimateSDUpscale, cg-image-filter, ComfyUI-KJNodes, ComfyUI-Custom-Scripts.
+
 ComfyUI node **Tag Dialect Switch (e621 / Danbooru)** — decides whether the loaded checkpoint understands e621 tags and passes through the matching prompt branch.
 
 Decision order (`mode = auto`):
@@ -33,6 +39,8 @@ male: no
 ```
 
 A line without a key is treated as trigger words.
+
+For a whole catalog, put the same data in `user/default/lora_hints.json`, keyed by file name without extension: `{"My_Lora": {"trained": ["tag one"], "role": "style", "rec": {"lo": 0.5, "hi": 0.7, "src": "подсказка"}, "random": false}}`. `random: false` keeps a LoRA out of the random pick; recipes and `always_include` still reach it. A text file next to the LoRA wins over this file.
 
 ## NSFW Action Picker
 
