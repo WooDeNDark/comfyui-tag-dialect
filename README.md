@@ -4,7 +4,7 @@ Random prompt constructor for ComfyUI: coherent tag prompts for SDXL checkpoints
 
 ## Install
 
-Clone into `custom_nodes` and restart ComfyUI. The ready workflow is in `workflows/`. It needs these node packs: rgthree-comfy, comfyui-image-saver, ComfyUI-Impact-Pack, ComfyUI-Impact-Subpack, ComfyUI_UltimateSDUpscale, cg-image-filter, ComfyUI-KJNodes, ComfyUI-Custom-Scripts.
+Clone into `custom_nodes` and restart ComfyUI. The ready workflow is in `workflows/`. It needs these node packs: rgthree-comfy, comfyui-image-saver, ComfyUI-Impact-Pack, ComfyUI-Impact-Subpack, ComfyUI_UltimateSDUpscale, cg-image-filter, ComfyUI-KJNodes, ComfyUI-Custom-Scripts, ComfyUI-RR-JointTagger.
 
 The face detailer uses [Fdetailer](https://civitai.com/models/1228695): put `fdetailer_v11.pt` into `models/ultralytics/segm`.
 
@@ -21,6 +21,7 @@ Five nodes in a chain replace the per-tag slots: **Основа → Персон
 - **LoRA** runs after the scene, so it sees the pins. It replaces unpinned fields of its role and leaves pinned ones alone. LoRAs that need a male partner are picked only for `m/f`.
 - **Итог** outputs the prompt with LoRA tags, the negative, a report, a recipe line and `clean`, the prompt without LoRA tags for the text encoder.
 - **Применить LoRA** loads the plan's LoRAs by file path. Connect it instead of LoraTagLoader: names need no ASCII and no unique prefix.
+- **Автоотбор** takes tags from an e621 tagger ([ComfyUI-RR-JointTagger](https://github.com/silveroxides/ComfyUI-RR-JointTagger)) and scores each frame of the batch against the plan. With `auto` on it picks the best frame for Image Filter. A frame with a stop tag is never picked.
 - **Настройки модели** outputs steps, CFG, sampler, scheduler and CFG rescale for the checkpoint from `presets.json`.
 
 Picks are coherent, not independent. `tags.json` holds composition weights, tag weights, a `locations` table that sets the light and poses for a place, and `species_traits` that set the natural coat of a species. Horns and wings go only to species listed in their group. In a scene with a partner the mood cannot be anger, sadness or boredom.

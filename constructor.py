@@ -16,7 +16,7 @@ import time
 
 from .lora_random import (DEF_QUOTAS, DEF_WEIGHTS, ROLES, _parse_map, _triggers, choose_loras,
                           lora_catalog)
-from .safety import AGE_GUARD, strip_stopped
+from .safety import AGE_GUARD, is_stopped, strip_stopped
 from .tag_dialect import (DEFAULT_FALLBACK, QUALITY_NEG, QUALITY_POS, _join, checkpoint_info, composition,
                           composition_negative, decide)
 
@@ -248,6 +248,18 @@ def log_run(plan, recipe):
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
     except (AttributeError, ImportError, OSError):
         pass
+
+
+def score_frame(plan, tag_text):
+    """Оценка кадра по тегам теггера: (доля найденного, отказ). Свет, кадр и эмоцию теггер видит плохо, их не считаем."""
+    seen = {t.strip().lower().replace("_", " ") for t in (tag_text or "").split(",") if t.strip()}
+    want = []
+    for name in ("Вид", "Волосы", "Глаза", "Одежда", "Окружение"):
+        want += [t.lower() for t in plan["fields"].get(name, {}).get("tags", []) if t not in ("indoors", "outdoors")]
+    stopped = sorted(t for t in seen if is_stopped(t))
+    found = sum(t in seen for t in want)
+    score = found / len(want) if want else 0.0
+    return (score if "anthro" in seen else score - 0.5), stopped
 
 
 def partner_ban(data):
@@ -738,3 +750,31 @@ class PromptSettings:
     def run(self, ckpt_name):
         p = preset_for(ckpt_name)
         return (p["steps"], float(p["cfg"]), p["sampler"], p["scheduler"], float(p["rescale"]))
+
+
+class PromptAutoPick:
+    """Выбирает лучший кадр партии по тегам теггера. Кадр со стоп-тегом отбрасывается всегда, даже при ручном выборе ответа."""
+
+    INPUT_IS_LIST = True
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"plan": (PLAN,), "tags": ("STRING", {"forceInput": True}),
+                             "auto": ("BOOLEAN", {"default": False, "tooltip": "Вкл: кадр выбирает нода. Выкл: выбираете вы"})}}
+
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("pick_list", "report")
+    FUNCTION = "run"
+    CATEGORY = "utils/prompt/constructor"
+
+    def run(self, plan, tags, auto):
+        plan, auto = plan[0], auto[0]
+        rows = [score_frame(plan, t) for t in tags]
+        good = [i for i, (_, stopped) in enumerate(rows) if not stopped]
+        report = "\n".join(f"Кадр {i}: {score:.2f}" + (f", отказ: {', '.join(stopped)}" if stopped else "")
+                           for i, (score, stopped) in enumerate(rows))
+        if auto and not good:
+            raise ValueError(f"Все кадры отклонены по стоп-листу\n{report}")
+        best = max(good, key=lambda i: rows[i][0]) if good else None
+        print(f"[Constructor] {report}")
+        return {"ui": {"text": [report]}, "result": (str(best) if auto else "", report)}

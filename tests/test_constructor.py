@@ -147,6 +147,27 @@ class Loras(unittest.TestCase):
                 self.assertTrue(l["rel"])
 
 
+class AutoPick(unittest.TestCase):
+    PLAN = {"fields": {"Вид": {"tags": ["wolf"]}, "Глаза": {"tags": ["blue eyes"]}, "Окружение": {"tags": ["forest", "outdoors"]}}}
+
+    def pick(self, tags, auto=True):
+        with contextlib.redirect_stdout(io.StringIO()):
+            return NODES["PromptAutoPick"]().run([self.PLAN], tags, [auto])["result"]
+
+    def test_best_frame_wins(self):
+        self.assertEqual(self.pick(["anthro, wolf", "anthro, wolf, blue eyes, forest"])[0], "1")
+
+    def test_stop_tag_rejects_frame(self):
+        self.assertEqual(self.pick(["anthro, wolf, blue eyes, forest, young", "anthro, wolf"])[0], "1")
+
+    def test_all_rejected_stops_the_run(self):
+        with self.assertRaises(ValueError):
+            self.pick(["anthro, feral", "anthro, young"])
+
+    def test_manual_mode_leaves_choice_to_user(self):
+        self.assertEqual(self.pick(["anthro, wolf"], auto=False)[0], "")
+
+
 class Recipe(unittest.TestCase):
     def test_recipe_repeats_any_seed(self):
         for seed in range(500):
