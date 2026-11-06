@@ -4,7 +4,7 @@ ComfyUI node **Tag Dialect Switch (e621 / Danbooru)** — decides whether the lo
 
 Decision order (`mode = auto`):
 1. SHA256 of the checkpoint file → Civitai `model-versions/by-hash` → base model + model tags.
-   * base Pony / NoobAI → e621
+   * base NoobAI → e621
    * Civitai tags `furry`, `anthro`, `e621`, `yiff`… or a furry-ish model name → e621
    * otherwise → Danbooru
 2. If the model is not on Civitai (or Civitai is unreachable) → `fallback_regex` against the checkpoint path.
@@ -42,12 +42,20 @@ Adds an action or an explicit pose that fits the composition (`solo`, `pair_mf`,
 
 Five nodes in a chain replace the per-tag slots: **Основа → Персонаж → Сцена → LoRA → Итог**. A plan object travels between them, and the prompt is assembled once, in the last node. All tags live in `tags.json`.
 
-- **Основа** sets the dialect, SFW or NSFW, composition and seed.
-- **Персонаж** and **Сцена** have a dropdown for each field. `случайно` lets the node pick; any other value pins the field, and the other fields adapt to it.
-- **LoRA** runs after the scene, so it sees the pins. It replaces unpinned fields of its role and leaves pinned ones alone.
-- **Итог** outputs the prompt, the negative, a report and a recipe line.
+- **Основа** sets the dialect, SFW or NSFW, composition and seed, and takes the base negative. A checkpoint that is not SDXL stops the run with a clear error.
+- **Персонаж** and **Сцена** have a dropdown for each field. `случайно` lets the node pick; any other value pins the field, and the fields picked after it adapt to it.
+- **LoRA** runs after the scene, so it sees the pins. It replaces unpinned fields of its role and leaves pinned ones alone. LoRAs that need a male partner are picked only for `m/f`.
+- **Итог** outputs the prompt with LoRA tags, the negative, a report, a recipe line and `clean`, the prompt without LoRA tags for the text encoder.
+- **Применить LoRA** loads the plan's LoRAs by file path. Connect it instead of LoraTagLoader: names need no ASCII and no unique prefix.
+- **Настройки модели** outputs steps, CFG, sampler, scheduler and CFG rescale for the checkpoint from `presets.json`.
 
-Paste the recipe into **Основа** to repeat a result with any seed, and delete the fields that should change. A dropdown value overrides the recipe. Every field has its own random stream, so pinning one field keeps the others. The LoRA node can be bypassed.
+Picks are coherent, not independent. `tags.json` holds composition weights, tag weights, a `locations` table that sets the light and poses for a place, and `species_traits` that set the natural coat of a species. Horns and wings go only to species listed in their group. In a scene with a partner the mood cannot be anger, sadness or boredom.
+
+Paste the recipe into **Основа** to repeat a result with any seed, and delete the fields that should change. A dropdown value overrides the recipe. The LoRA node can be bypassed. **Итог** must not be bypassed: it has no string input, so a bypass stops the run and the negative cannot reach the prompt.
+
+`safety.py` is the floor that no setting removes: the age negative is always added, and stop tags are struck from the final prompt wherever they came from, including recipes, pins and LoRA triggers.
+
+Run the checks without ComfyUI: `python3 -m unittest discover tests`.
 
 ## Slot Extras
 

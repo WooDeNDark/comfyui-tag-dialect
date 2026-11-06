@@ -15,11 +15,13 @@ import re
 
 from .lora_random import (DEF_QUOTAS, DEF_WEIGHTS, ROLES, _parse_map, _triggers, choose_loras,
                           lora_catalog)
+from .safety import AGE_GUARD, strip_stopped
 from .slot_extras import _allowed
 from .tag_dialect import (DEFAULT_FALLBACK, QUALITY_NEG, QUALITY_POS, _join, checkpoint_info, composition,
                           composition_negative, decide)
 
 TAGS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tags.json")
+PRESETS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "presets.json")
 PLAN = "TAG_PLAN"
 RANDOM = "случайно"
 CHARACTER_FIELDS = ("Вид", "Телосложение", "Окрас", "Волосы", "Глаза", "Особенности")
@@ -46,6 +48,28 @@ def load_tags():
     return _cache["data"]
 
 
+def load_presets():
+    with open(PRESETS_PATH, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def preset_for(ckpt_name):
+    """Настройки чекпоинта: первая подходящая строка поверх значений по умолчанию."""
+    presets = load_presets()
+    name = (ckpt_name or "").lower()
+    for model in presets["models"]:
+        if model["match"] in name:
+            return {**presets["default"], **model}
+    return dict(presets["default"])
+
+
+def check_supported(ckpt_name):
+    """Понятная ошибка вместо KeyError из CLIPTextEncodeSDXL."""
+    for key, base in load_presets()["unsupported"].items():
+        if key.lower() in (ckpt_name or "").lower():
+            raise ValueError(f"Этот workflow работает только с SDXL-чекпоинтами, а {ckpt_name} собран на {base}")
+
+
 def parse_recipe(text):
     """«Вид: wolf; Поза: standing, hand on hip» → {поле: [теги]}. Сцена остаётся одной строкой."""
     pins = {}
@@ -64,11 +88,26 @@ def field_rng(plan, name):
 
 
 def available(data, plan, tags):
-    """Теги, которые можно написать в словаре запуска."""
+    """Теги, которые можно написать в словаре запуска и которые разрешены рейтингом и сценой."""
+    banned = set(plan.get("ban_tags", ())) | set(data["rating"][plan["rating"]].get("exclude", ()))
+    tags = [t for t in tags if t not in banned]
     if plan["dialect"] != "danbooru":
-        return list(tags)
+        return tags
     names = data["danbooru_names"]
     return [t for t in tags if t not in names or names[t]]
+
+
+def weighted_pick(rnd, data, pairs):
+    """pairs: [(тег, множитель группы)]. Вес тега берётся из tags.json: частые теги выпадают чаще редких."""
+    weights = [data["weights"].get(t, 1.0) * m for t, m in pairs]
+    return rnd.choices([t for t, _ in pairs], weights=weights)[0] if sum(weights) > 0 else None
+
+
+def species_fits(plan, group):
+    """Рога и крылья только у видов, которым они свойственны."""
+    allowed = group.get("species_only")
+    species = plan["fields"].get("Вид", {}).get("tags")
+    return not allowed or bool(species and species[0].lower() in allowed)
 
 
 def seen_groups(data, plan):
@@ -95,17 +134,78 @@ def set_field(plan, data, name, tags, pinned=False):
             plan["groups"].append(group["name"])
 
 
-def pick_primary(plan, data, name, rnd, skip=()):
+def pick_primary(plan, data, name, rnd, skip=(), only_axes=None):
     """Один тег поля. Откровенный вариант из той же группы выпадает с вероятностью nsfw_rate."""
     field = data["fields"][name]
     seen = seen_groups(data, plan)
-    groups = [g for g in field["groups"] if primary_ok(g, seen, data["field_names"][name])]
+    groups = [g for g in field["groups"] if primary_ok(g, seen, data["field_names"][name]) and species_fits(plan, g)
+              and (only_axes is None or g["axis"] in only_axes)]
     if plan["rating"] == "NSFW" and rnd.random() < field.get("nsfw_rate", 0):
-        pool = [t for g in groups for t in available(data, plan, g.get("nsfw_tags", []))]
+        pool = [(t, 1.0) for g in groups for t in available(data, plan, g.get("nsfw_tags", []))]
         if pool:
-            return rnd.choice(pool)
-    pool = [t for g in groups for t in available(data, plan, g["tags"]) if t not in skip]
-    return rnd.choice(pool) if pool else None
+            return weighted_pick(rnd, data, pool)
+    pool = [(t, g.get("weight", 1.0)) for g in groups for t in available(data, plan, g["tags"]) if t not in skip]
+    return weighted_pick(rnd, data, pool) if pool else None
+
+
+def pick_field(plan, data, name, rnd):
+    """Теги поля: presence решает, есть ли поле, axes даёт по тегу на главную ось."""
+    field = data["fields"][name]
+    if rnd.random() >= field.get("presence", 1):
+        return []
+    picks = [pick_primary(plan, data, name, rnd, only_axes=axes) for axes in field.get("axes", [None])]
+    return [t for t in picks if t]
+
+
+def pick_coat(plan, data, rnd):
+    """Природный окрас вида. Яркий окрас из общего поля выпадает редко."""
+    species = plan["fields"].get("Вид", {}).get("tags") or [""]
+    trait = data["species_traits"].get(species[0].lower())
+    tuning = data["tuning"]
+    if not trait or rnd.random() < tuning["bright_coat"]:
+        return pick_field(plan, data, "Окрас", rnd)
+    coat = available(data, plan, trait["coat"]) or trait["coat"]
+    tags = [rnd.choice(coat)]
+    pattern = available(data, plan, trait["pattern"])
+    if pattern and rnd.random() < tuning["pattern_chance"]:
+        tags.append(rnd.choice(pattern))
+    return tags
+
+
+def pick_location(plan, data):
+    """Место задаёт подходящий свет и позы. Возвращает строку таблицы или None для места вне таблицы."""
+    locations = data["locations"]
+    if "Окружение" in plan["pins"]:
+        tags = plan["fields"]["Окружение"]["tags"]
+        return next((l for l in locations if l["tag"] in tags), None)
+    rnd = field_rng(plan, "Окружение")
+    if plan["rating"] == "NSFW" and rnd.random() < data["fields"]["Окружение"].get("nsfw_rate", 0):
+        tag = pick_primary(plan, data, "Окружение", random.Random(f"{plan['seed']}:место"))
+        set_field(plan, data, "Окружение", [tag] if tag else [])
+        return next((l for l in locations if l["tag"] == tag), None)
+    pool = [l for l in locations if available(data, plan, [l["tag"]])]
+    location = rnd.choices(pool, weights=[l["weight"] for l in pool])[0]
+    set_field(plan, data, "Окружение", [location["tag"]])
+    return location
+
+
+def from_location(data, plan, options):
+    """Варианты из таблицы мест, все теги которых можно написать в словаре запуска."""
+    return [o for o in options if len(available(data, plan, split_tags(o))) == len(split_tags(o))]
+
+
+def split_tags(text):
+    return [t.strip() for t in text.split(",") if t.strip()]
+
+
+def partner_ban(data):
+    """Эмоции, которые в сцене с партнёром читаются как несогласие."""
+    groups = data["fields"]["Эмоция"]["groups"]
+    return sorted({t for g in groups if g["name"] in ("bad", "calm") for t in g["tags"]})
+
+
+def rating_of(data, plan):
+    return data.get("rating_family", {}).get(plan["family"], data["rating"]).get(plan["rating"]) or data["rating"][plan["rating"]]
 
 
 def add_extras(plan, data, names, chance, max_per_field, max_total):
@@ -129,12 +229,13 @@ def add_extras(plan, data, names, chance, max_per_field, max_total):
             if added >= max_total or rnd.random() >= chance:
                 break
             seen = seen_groups(data, plan)
-            cands = [g for g in groups if _allowed(g, axes, seen, nsfw)
+            cands = [g for g in groups if g.get("weight", 1) > 0 and species_fits(plan, g) and _allowed(g, axes, seen, nsfw)
                      and [t for t in available(data, plan, g["tags"]) if t not in skip]]
             if not cands:
                 break
-            group = rnd.choice(cands)
-            tag = rnd.choice([t for t in available(data, plan, group["tags"]) if t not in skip])
+            pool = [(t, g.get("weight", 1.0)) for g in cands for t in available(data, plan, g["tags"]) if t not in skip]
+            tag = weighted_pick(rnd, data, pool)
+            group = next(g for g in cands if tag in g["tags"])
             tags.append(tag)
             skip.add(tag)
             axes.add(group["axis"])
@@ -214,6 +315,8 @@ class PromptBase:
                 "dialect": (["auto", "e621", "danbooru"], {"default": "auto"}),
                 "recipe": ("STRING", {"default": "", "multiline": True,
                                       "tooltip": "Строка повтора из ноды «Итог». Удалите поля, которые должны меняться"}),
+                # Негатив входит здесь, а не в «Итог»: при обходе ноды ComfyUI подал бы его на выход промпта
+                "negative_text": ("STRING", {"forceInput": True, "tooltip": "Базовый негатив с защитой возраста"}),
             },
         }
 
@@ -222,12 +325,13 @@ class PromptBase:
     FUNCTION = "run"
     CATEGORY = "utils/prompt/constructor"
 
-    def run(self, ckpt_name, seed, rating, composition, dialect, recipe):
+    def run(self, ckpt_name, seed, rating, composition, dialect, recipe, negative_text):
+        check_supported(ckpt_name)
         data = load_tags()
         chosen, why, family = decide(ckpt_name, dialect, DEFAULT_FALLBACK)
         plan = {"seed": seed, "ckpt": ckpt_name, "dialect": chosen, "family": family, "rating": rating,
                 "why": why, "pins": parse_recipe(recipe), "fields": {}, "groups": [], "loras": [],
-                "triggers": [], "notes": []}
+                "triggers": [], "notes": [], "negative": negative_text}
         comps = list(data["composition"])
         pinned = plan["pins"].get("Состав")
         if composition != RANDOM:
@@ -235,7 +339,8 @@ class PromptBase:
         elif pinned and pinned[0] in comps:
             plan["composition"] = pinned[0]
         else:
-            plan["composition"] = field_rng(plan, "Состав").choice(comps)
+            weights = [data["composition"][c].get("weight", 1) for c in comps]
+            plan["composition"] = field_rng(plan, "Состав").choices(comps, weights=weights)[0]
         return (plan,)
 
 
@@ -250,9 +355,9 @@ class PromptCharacter:
             "required": {
                 "plan": (PLAN,),
                 **fields,
-                "extras_chance": ("FLOAT", {"default": 0.35, "min": 0.0, "max": 1.0, "step": 0.05,
+                "extras_chance": ("FLOAT", {"default": 0.15, "min": 0.0, "max": 1.0, "step": 0.05,
                                             "tooltip": "Вероятность добавить к полю ещё один совместимый тег"}),
-                "max_extras": ("INT", {"default": 3, "min": 0, "max": 15}),
+                "max_extras": ("INT", {"default": 2, "min": 0, "max": 15}),
             },
         }
 
@@ -268,9 +373,11 @@ class PromptCharacter:
         fill_fixed(plan, data, CHARACTER_FIELDS)
         for name in CHARACTER_FIELDS:
             if name not in plan["pins"]:
-                tag = pick_primary(plan, data, name, field_rng(plan, name))
-                set_field(plan, data, name, [tag] if tag else [])
-        plan["notes"] += add_extras(plan, data, CHARACTER_FIELDS, extras_chance, 2, max_extras)
+                rnd = field_rng(plan, name)
+                tags = pick_coat(plan, data, rnd) if name == "Окрас" else pick_field(plan, data, name, rnd)
+                set_field(plan, data, name, tags)
+        # Окрас уже согласован с видом: добавки дали бы пятна лисе и полосы льву
+        plan["notes"] += add_extras(plan, data, [n for n in CHARACTER_FIELDS if n != "Окрас"], extras_chance, 2, max_extras)
         plan["notes"] += fit_cover(plan, data)
         return (plan,)
 
@@ -293,9 +400,9 @@ class PromptScene:
                                            "tooltip": "Вероятность взять сцену вместо обычной позы (только NSFW)"}),
                 "nude_chance": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.05,
                                           "tooltip": "Вероятность оставить персонажа без одежды (только NSFW)"}),
-                "extras_chance": ("FLOAT", {"default": 0.35, "min": 0.0, "max": 1.0, "step": 0.05,
+                "extras_chance": ("FLOAT", {"default": 0.15, "min": 0.0, "max": 1.0, "step": 0.05,
                                             "tooltip": "Вероятность добавить к полю ещё один совместимый тег"}),
-                "max_extras": ("INT", {"default": 3, "min": 0, "max": 15}),
+                "max_extras": ("INT", {"default": 2, "min": 0, "max": 15}),
             },
         }
 
@@ -310,13 +417,18 @@ class PromptScene:
         apply_dropdowns(plan, pins)
         fill_fixed(plan, data, SCENE_FIELDS)
         nsfw = plan["rating"] == "NSFW"
-        for name in ("Окружение", "Свет", "Эмоция"):
-            if name not in plan["pins"]:
-                tag = pick_primary(plan, data, name, field_rng(plan, name))
-                set_field(plan, data, name, [tag] if tag else [])
+        location = pick_location(plan, data)
+        if "Свет" not in plan["pins"]:
+            rnd = field_rng(plan, "Свет")
+            options = from_location(data, plan, location["lights"]) if location else []
+            set_field(plan, data, "Свет", split_tags(rnd.choice(options)) if options else pick_field(plan, data, "Свет", rnd))
         if "Стиль" not in plan["pins"]:
-            pool = data["styles"].get(plan["dialect"], [])
-            set_field(plan, data, "Стиль", [field_rng(plan, "Стиль").choice(pool)] if pool else [])
+            rnd = field_rng(plan, "Стиль")
+            # Pony обучали без имён художников, поэтому такой тег там ничего не делает
+            pool = [] if plan["family"] == "pony" and plan["dialect"] == "e621" else data["styles"].get(plan["dialect"], [])
+            prefix = "by " if plan["family"] == "sdxl" and plan["dialect"] == "e621" else ""
+            use = pool and rnd.random() < data["tuning"]["style_chance"]
+            set_field(plan, data, "Стиль", [prefix + rnd.choice(pool)] if use else [])
 
         scene = None
         if "Сцена" not in plan["pins"]:
@@ -328,13 +440,28 @@ class PromptScene:
                 scene = rnd.choice(pool)
             set_field(plan, data, "Сцена", [scene] if scene else [])
         has_scene = bool(plan["fields"]["Сцена"]["tags"])
+        if nsfw and has_scene and plan["composition"] != "solo":
+            plan["ban_tags"] = partner_ban(data)
+        if "Эмоция" not in plan["pins"]:
+            set_field(plan, data, "Эмоция", pick_field(plan, data, "Эмоция", field_rng(plan, "Эмоция")))
 
         if "Кадр" not in plan["pins"]:
-            tag = pick_primary(plan, data, "Кадр", field_rng(plan, "Кадр"), NARROW_FRAMES if has_scene else ())
-            set_field(plan, data, "Кадр", [tag] if tag else [])
+            rnd = field_rng(plan, "Кадр")
+            tag = pick_primary(plan, data, "Кадр", rnd, NARROW_FRAMES if has_scene else ())
+            frame = [tag] if tag else []
+            if tag != "rear view" and rnd.random() < data["tuning"]["gaze_chance"]:
+                frame.append("looking at viewer")
+            set_field(plan, data, "Кадр", frame)
         if "Поза" not in plan["pins"]:
-            tag = None if has_scene else pick_primary(plan, data, "Поза", field_rng(plan, "Поза"))
-            set_field(plan, data, "Поза", [tag] if tag else [])
+            rnd = field_rng(plan, "Поза")
+            poses = from_location(data, plan, location["poses"]) if location else []
+            if has_scene:
+                tags = []
+            elif poses:
+                tags = [weighted_pick(rnd, data, [(p, 1.0) for p in poses])]
+            else:
+                tags = pick_field(plan, data, "Поза", rnd)
+            set_field(plan, data, "Поза", tags)
         if "Одежда" not in plan["pins"]:
             rnd = field_rng(plan, "Одежда")
             if nsfw and rnd.random() < nude_chance:
@@ -342,7 +469,8 @@ class PromptScene:
             else:
                 tag = pick_primary(plan, data, "Одежда", rnd)
                 set_field(plan, data, "Одежда", [tag] if tag else [])
-        plan["notes"] += add_extras(plan, data, SCENE_FIELDS, extras_chance, 2, max_extras)
+        # Место, свет и кадр берут согласованный набор, поэтому добавки им не нужны
+        plan["notes"] += add_extras(plan, data, ("Эмоция", "Поза", "Одежда"), extras_chance, 2, max_extras)
         return (plan,)
 
 
@@ -380,8 +508,8 @@ class PromptLoras:
             "required": {
                 "plan": (PLAN,),
                 "max_loras": ("INT", {"default": 10, "min": 0, "max": 20}),
-                "chance": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 1.0, "step": 0.05,
-                                     "tooltip": "Вероятность добавить каждую следующую LoRA"}),
+                "chance": ("FLOAT", {"default": 0.6, "min": 0.0, "max": 1.0, "step": 0.05,
+                                     "tooltip": "Вероятность добавить каждую следующую LoRA (0.6 ≈ 1–2 за раз)"}),
                 "weight_budget": ("FLOAT", {"default": 3.5, "min": 0.5, "max": 10.0, "step": 0.1}),
                 "male_preference": ("FLOAT", {"default": 0.35, "min": 0.0, "max": 1.0, "step": 0.05,
                                               "tooltip": "Насколько реже брать LoRA с мужской анатомией"}),
@@ -421,11 +549,15 @@ class PromptLoras:
         for l, w in zip(chosen, weights):
             words = _triggers(l.get("trained") or [])
             plan["triggers"] += words
-            plan["loras"].append({"stem": l["stem"], "weight": w})
+            plan["loras"].append({"stem": l["stem"], "rel": l.get("rel"), "weight": w})
             plan["notes"].append(f"LoRA: {l['stem']} ×{w} [{l['role']}]" + (f" + {', '.join(words)}" if words else ""))
             plan["notes"] += clear_for_role(plan, data, l["role"])
             if l["role"] == "act":
                 plan["act"] = True
+                plan["ban_tags"] = partner_ban(data)
+                mood = plan["fields"].get("Эмоция")
+                if mood and not mood["pinned"]:
+                    mood["tags"] = [t for t in mood["tags"] if t not in plan["ban_tags"]]
         return (plan,)
 
     @staticmethod
@@ -456,20 +588,19 @@ class PromptResult:
         return {
             "required": {
                 "plan": (PLAN,),
-                "negative_text": ("STRING", {"forceInput": True, "tooltip": "Базовый негатив с защитой возраста"}),
                 "add_quality": ("BOOLEAN", {"default": True}),
             },
         }
 
-    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING")
-    RETURN_NAMES = ("text", "negative", "info", "recipe")
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "STRING")
+    RETURN_NAMES = ("text", "negative", "info", "recipe", "clean")
     FUNCTION = "run"
     CATEGORY = "utils/prompt/constructor"
 
-    def run(self, plan, negative_text, add_quality):
+    def run(self, plan, add_quality):
         data = load_tags()
         dialect, family = plan["dialect"], plan["family"]
-        rating = data["rating"][plan["rating"]]
+        rating = rating_of(data, plan)
         comp = data["composition"][plan["composition"]][dialect]
         parts = [data["detail"], rating["positive"], data["base"][dialect], comp, data["gender"][dialect]]
         fields = plan["fields"]
@@ -478,12 +609,16 @@ class PromptResult:
         if plan.get("act"):
             parts.append("sex")
         text = _join(*parts, *plan["triggers"])
-        negative = _join(negative_text, rating["negative"])
+        negative = _join(AGE_GUARD, plan.get("negative"), rating["negative"])
         if add_quality:
             source = "source_furry" if dialect == "e621" else "source_anime"
-            text = _join(QUALITY_POS.get(family, QUALITY_POS["other"]).format(source=source), text)
-            negative = _join(negative, QUALITY_NEG.get(family, QUALITY_NEG["other"]))
+            preset = preset_for(plan["ckpt"])
+            quality = preset.get("quality") or QUALITY_POS.get(family, QUALITY_POS["other"])
+            text = _join(quality.format(source=source), text)
+            negative = _join(negative, preset.get("quality_neg") or QUALITY_NEG.get(family, QUALITY_NEG["other"]))
         negative = _join(negative, composition_negative(text))
+        text, stopped = strip_stopped(text)
+        clean = text
         lora_tags = " ".join(f"<lora:{l['stem']}:{l['weight']}>" for l in plan["loras"])
         if lora_tags:
             text += " " + lora_tags
@@ -495,7 +630,55 @@ class PromptResult:
         if plan.get("loras_chosen"):
             recipe.append("LoRA: " + ", ".join(f"{l['stem']}:{l['weight']}" for l in plan["loras"]))
         recipe = "; ".join(recipe)
+        notes = plan["notes"] + ([f"Вычеркнуто по стоп-листу: {', '.join(stopped)}"] if stopped else [])
         info = "\n".join([f"Словарь: {dialect} · {family} ← {plan['why']}", f"Рейтинг: {plan['rating']}",
-                          f"Состав: {plan['composition']}"] + plan["notes"])
+                          f"Состав: {plan['composition']}"] + notes)
         print(f"[Constructor] {info}")
-        return {"ui": {"text": [info]}, "result": (text, negative, info, recipe)}
+        return {"ui": {"text": [info]}, "result": (text, negative, info, recipe, clean)}
+
+
+class PromptApplyLoras:
+    """Подключает LoRA плана по пути файла: имя не ищется по началу, годятся любые символы, в CLIP не уходит сырой тег."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"model": ("MODEL",), "clip": ("CLIP",), "plan": (PLAN,)}}
+
+    RETURN_TYPES = ("MODEL", "CLIP")
+    RETURN_NAMES = ("model", "clip")
+    FUNCTION = "run"
+    CATEGORY = "utils/prompt/constructor"
+
+    def run(self, model, clip, plan):
+        import comfy.sd
+        import comfy.utils
+        import folder_paths
+        for lora in plan.get("loras", []):
+            path = folder_paths.get_full_path("loras", lora["rel"]) if lora.get("rel") else None
+            if not path:
+                print(f"[Constructor] LoRA не найдена: {lora['stem']}")
+                continue
+            state = comfy.utils.load_torch_file(path, safe_load=True)
+            model, clip = comfy.sd.load_lora_for_models(model, clip, state, lora["weight"], lora["weight"])
+        return (model, clip)
+
+
+class PromptSettings:
+    """Настройки сэмплера под чекпоинт из presets.json."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"ckpt_name": ("STRING", {"forceInput": True})}}
+
+    try:
+        import comfy.samplers
+        RETURN_TYPES = ("INT", "FLOAT", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, "FLOAT")
+    except ImportError:
+        RETURN_TYPES = ("INT", "FLOAT", "STRING", "STRING", "FLOAT")
+    RETURN_NAMES = ("steps", "cfg", "sampler", "scheduler", "rescale")
+    FUNCTION = "run"
+    CATEGORY = "utils/prompt/constructor"
+
+    def run(self, ckpt_name):
+        p = preset_for(ckpt_name)
+        return (p["steps"], float(p["cfg"]), p["sampler"], p["scheduler"], float(p["rescale"]))

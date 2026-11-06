@@ -2,12 +2,14 @@ from .tag_dialect import TagDialectSwitch
 from .lora_random import LoraRandomizer
 from .nsfw_actions import NsfwActionPicker
 from .slot_extras import SlotExtras
-from .constructor import PromptBase, PromptCharacter, PromptLoras, PromptResult, PromptScene
+from .constructor import (PromptApplyLoras, PromptBase, PromptCharacter, PromptLoras, PromptResult, PromptScene,
+                          PromptSettings)
 
 NODE_CLASS_MAPPINGS = {"TagDialectSwitch": TagDialectSwitch, "LoraRandomizer": LoraRandomizer,
                        "NsfwActionPicker": NsfwActionPicker, "SlotExtras": SlotExtras,
                        "PromptBase": PromptBase, "PromptCharacter": PromptCharacter, "PromptScene": PromptScene,
-                       "PromptLoras": PromptLoras, "PromptResult": PromptResult}
+                       "PromptLoras": PromptLoras, "PromptResult": PromptResult, "PromptApplyLoras": PromptApplyLoras,
+                       "PromptSettings": PromptSettings}
 NODE_DISPLAY_NAME_MAPPINGS = {
     "TagDialectSwitch": "Tag Dialect Switch (e621 / Danbooru)",
     "LoraRandomizer": "LoRA Randomizer (совместимые с чекпоинтом)",
@@ -18,5 +20,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "PromptScene": "Конструктор · Сцена",
     "PromptLoras": "Конструктор · LoRA",
     "PromptResult": "Конструктор · Итог",
+    "PromptApplyLoras": "Конструктор · Применить LoRA",
+    "PromptSettings": "Конструктор · Настройки модели",
 }
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]

@@ -16,7 +16,7 @@ import urllib.request
 CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache.json")
 CACHE_V = 3                           # при смене формата записи Civitai запрашиваются заново
 NOTFOUND_TTL = 7 * 24 * 3600          # «нет на Civitai» перепроверяем раз в неделю
-E621_BASES = ("pony", "noobai")         # базы, которые учили на e621
+E621_BASES = ("noobai",)                # базы, которые учили на e621; Pony смешанная: решают теги модели
 FURRY_TAGS = {"furry", "anthro", "anthropomorphic", "e621", "yiff", "furry art", "furries"}
 FURRY_NAME_RE = re.compile(r"furry|yiff|anthro|e621", re.I)
 DEFAULT_FALLBACK = r"furry|yiff|anthro|e621|noob|indigo|fluffy|pony"
@@ -250,7 +250,7 @@ QUALITY_POS = {
 }
 QUALITY_NEG = {
     "illu": "worst quality, bad quality, low quality, lowres",
-    "pony": "score_4, score_5, score_6, worst quality, low quality",
+    "pony": "score_4, score_5, score_6, source_pony, worst quality, low quality",
     "anima": "worst quality, low quality, lowres",
     "sdxl": "worst quality, low quality, lowres, blurry",
     "other": "worst quality, low quality",
@@ -319,7 +319,7 @@ def single_composition(text):
 
 
 # Мужской персонаж соло и male/male не нужны никогда; при solo — запрещаем второго персонажа
-COMP_NEG_ALWAYS = "male/male, male focus, yaoi, 2boys, multiple boys, bara"
+COMP_NEG_ALWAYS = "male/male, male focus, yaoi, 2boys, multiple boys, bara, feral, quadruped"
 COMP_NEG_SOLO = "duo, trio, group, 1boy, male, 2girls, multiple girls"
 COMP_NEG_FEMALE_ONLY = "1boy, male"
 

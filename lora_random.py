@@ -37,6 +37,8 @@ ANAT_RE = re.compile(r"\b(penis|penises|knotted|knotting|blowjob|fellatio|dick|c
 
 
 def _is_male(meta, rel, role):
+    if role == "act" or PARTNER_RE.search(rel):
+        return True
     m = meta or {}
     name_trig = " ".join([rel, m.get("name") or "", " ".join(m.get("trained") or [])])
     if role in ("style", "detail", "clothing", "character"):
@@ -46,8 +48,8 @@ def _is_male(meta, rel, role):
 NSFW_NAME = re.compile(r"nsfw|sexy|lingerie|underwear|nude|lewd|nylon|stocking|slingshot|(?:^|[_\W])ass(?:[_\W]|$)|"
                        r"bodystocking|chastity|bdsm|bunnysuit|bikini|porn|penis|pussy|cum", re.I)
 NSFW_TAGS = {"nsfw", "sexy", "lingerie", "underwear", "nude", "nudity", "lewd", "fetish", "hentai", "porn", "erotic", "sex"}
-# Сцены, где партнёр — мужчина: при f/f и группе девушек такие LoRA спорят с негативом «1boy, male»
-ACT_NEEDS_MALE = re.compile(r"prone.?bone|doggy|missionary|blowjob|fellatio|penis|knot|mating.?press|cowgirl|paizuri", re.I)
+# Концепты со сценой с мужчиной: роль concept, но без партнёра они ломают состав
+PARTNER_RE = re.compile(r"tugging|sitting.?on.?lap|titty.?sucking", re.I)
 NSFW_PROMPT = re.compile(r"(^|,)\s*(nsfw|explicit|rating[_ ]explicit|questionable|nude)\s*(,|$)", re.I)
 ROLES = ["style", "clothing", "body", "act", "concept", "detail", "other"]
 DEF_QUOTAS = "style=1, clothing=1, body=1, act=1, concept=2, detail=2, other=1"
@@ -319,8 +321,6 @@ def choose_loras(ck_fam, allow_nsfw, solo, multi, male, want, quota, wr, seed, m
             skip("nsfw")
         elif l["role"] == "act" and not multi:
             skip("нужен партнёр")
-        elif l["role"] == "act" and not male and ACT_NEEDS_MALE.search(l["rel"]):
-            skip("сцена с мужчиной")
         elif l["male"] and not male:
             skip("мужская анатомия")
         elif excl and excl.search(l["rel"]):
@@ -333,15 +333,15 @@ def choose_loras(ck_fam, allow_nsfw, solo, multi, male, want, quota, wr, seed, m
     used = {}
     for l in chosen:
         used[l["role"]] = used.get(l["role"], 0) + 1
+    # Выбор из всего пула: иначе после заполнения крупных ролей вероятность уходит одиночным LoRA малых ролей
     while len(chosen) < max_loras and pool and rnd.random() < chance:
-        cands = [l for l in pool if used.get(l["role"], 0) < quota.get(l["role"], 1)]
-        if not cands:
-            break
-        w = [male_preference if l["male"] else 1.0 for l in cands]
+        w = [male_preference if l["male"] else 1.0 for l in pool]
         if sum(w) <= 0:
             break
-        l = rnd.choices(cands, weights=w)[0]
+        l = rnd.choices(pool, weights=w)[0]
         pool.remove(l)
+        if used.get(l["role"], 0) >= quota.get(l["role"], 1):
+            continue
         used[l["role"]] = used.get(l["role"], 0) + 1
         chosen.append(l)
 
