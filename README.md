@@ -6,6 +6,8 @@ Random prompt constructor for ComfyUI: coherent tag prompts for SDXL checkpoints
 
 Clone into `custom_nodes` and restart ComfyUI. The ready workflow is in `workflows/`. It needs these node packs: rgthree-comfy, comfyui-image-saver, ComfyUI-Impact-Pack, ComfyUI-Impact-Subpack, ComfyUI_UltimateSDUpscale, cg-image-filter, ComfyUI-KJNodes, ComfyUI-Custom-Scripts.
 
+The face detailer uses [Fdetailer](https://civitai.com/models/1228695): put `fdetailer_v11.pt` into `models/ultralytics/segm`.
+
 ## Dialect
 
 The dialect is `auto` by default: the SHA256 of the checkpoint is looked up on Civitai. A NoobAI base or furry tags give e621, otherwise Danbooru. A checkpoint missing from Civitai falls back to a regex on its path. Answers are cached in `cache.json`. Set `CIVITAI_API_TOKEN` to use your key.
