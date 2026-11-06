@@ -8,6 +8,7 @@
   * веса по ролям + общий бюджет весов;
   * учитывается состав (solo / duo / с мужским персонажем) и режим SFW/NSFW.
 """
+import json
 import os
 import random
 import re
@@ -125,6 +126,17 @@ def _read_hint(path):
     return out
 
 
+def _stored_hints():
+    """Подсказки из user/default/lora_hints.json: каталог у каждого свой, поэтому файла нет в пакете."""
+    try:
+        import folder_paths
+        path = os.path.join(folder_paths.get_user_directory(), "default", "lora_hints.json")
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (AttributeError, OSError, ValueError):
+        return {}
+
+
 def _folder_role(rel):
     """Папка loras/<семейство>/<роль>/ разобрана вручную, поэтому важнее тегов Civitai."""
     for part in rel.lower().replace("\\", "/").split("/")[:-1]:
@@ -190,6 +202,7 @@ def lora_catalog():
     """-> list(dict(rel, stem, family, role, nsfw, male, trained, name, src))"""
     import folder_paths
     out = []
+    stored = _stored_hints()
     with _lock:
         cache = _load_cache()
         try:
@@ -207,7 +220,7 @@ def lora_catalog():
                 except Exception as e:
                     print(f"[LoraRandom] {rel}: {e}")
                 m = meta if (meta and meta.get("found")) else None
-                hint = _read_hint(path)
+                hint = {**stored.get(stem, {}), **_read_hint(path)}
                 role = hint.get("role") or _role(m, rel)
                 out.append({
                     "rel": rel, "stem": stem,
@@ -215,7 +228,7 @@ def lora_catalog():
                     "role": role, "nsfw": hint.get("nsfw", _is_nsfw(m, rel)),
                     "male": hint.get("male", _is_male(m, rel, role)),
                     "trained": hint.get("trained") or ((m.get("trained") or []) if m else []),
-                    "rec": hint.get("rec") or (m.get("rec") if m else None),
+                    "rec": hint.get("rec") or (m.get("rec") if m else None), "random": hint.get("random", True),
                     "name": m.get("name") if m else stem, "src": "Civitai" if m else "папка/имя",
                 })
         finally:
@@ -313,6 +326,8 @@ def choose_loras(ck_fam, allow_nsfw, solo, multi, male, want, quota, wr, seed, m
         nsfw_hit = l["nsfw"] if l["role"] not in ("style", "detail") else bool(NSFW_NAME.search(l["rel"]))
         if l["stem"].lower() in pinned or l["rel"].lower() in pinned:
             chosen.append(l)
+        elif not l.get("random", True):
+            skip("только вручную")
         elif l["family"] not in ok_fams:
             skip("семейство")
         elif l["role"] not in want:

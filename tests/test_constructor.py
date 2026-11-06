@@ -26,7 +26,8 @@ def lora(stem, role, male=False, nsfw=False, trained=()):
 
 CATALOG = [lora("Style_A", "style", trained=["style a"]), lora("Outfit_B", "clothing", trained=["outfit b"]),
            lora("Detail_C", "detail"), lora("Vaginal_Tugging", "concept", trained=["tug"]),
-           lora("Scene_D", "act", nsfw=True, trained=["scene d"]), lora("Scene_E", "sex", nsfw=True)]
+           lora("Scene_D", "act", nsfw=True, trained=["scene d"]), lora("Scene_E", "sex", nsfw=True),
+           dict(lora("Manual_F", "style"), random=False)]
 
 
 def generate(seed, dialect="e621", family="illu", rating="NSFW", composition=cn.RANDOM, recipe="", negative="guard"):
@@ -135,6 +136,10 @@ class Loras(unittest.TestCase):
             if plan["composition"] != "m/f":
                 stems = {l["stem"] for l in plan["loras"]}
                 self.assertFalse(stems & {"Vaginal_Tugging", "Scene_D", "Scene_E"}, plan["composition"])
+
+    def test_manual_only_lora_stays_out_of_random_pick(self):
+        for seed in range(1500):
+            self.assertNotIn("Manual_F", {l["stem"] for l in generate(seed)["plan"]["loras"]})
 
     def test_plan_keeps_file_path(self):
         for seed in range(300):
