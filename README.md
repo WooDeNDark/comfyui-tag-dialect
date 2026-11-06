@@ -59,7 +59,7 @@ Five nodes in a chain replace the per-tag slots: **Основа → Персон
 
 Picks are coherent, not independent. `tags.json` holds composition weights, tag weights, a `locations` table that sets the light and poses for a place, and `species_traits` that set the natural coat of a species. Horns and wings go only to species listed in their group. In a scene with a partner the mood cannot be anger, sadness or boredom.
 
-Paste the recipe into **Основа** to repeat a result with any seed, and delete the fields that should change. A dropdown value overrides the recipe. The LoRA node can be bypassed. **Итог** must not be bypassed: it has no string input, so a bypass stops the run and the negative cannot reach the prompt.
+Paste the recipe into **Основа** to repeat a result with any seed, and delete the fields that should change. A dropdown value overrides the recipe. The LoRA node can be bypassed. **Итог** must not be bypassed: the prompt would be empty. It has no string input, so the negative cannot reach the prompt.
 
 `safety.py` is the floor that no setting removes: the age negative is always added, and stop tags are struck from the final prompt wherever they came from, including recipes, pins and LoRA triggers.
 
