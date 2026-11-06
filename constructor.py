@@ -17,7 +17,6 @@ import time
 from .lora_random import (DEF_QUOTAS, DEF_WEIGHTS, ROLES, _parse_map, _triggers, choose_loras,
                           lora_catalog)
 from .safety import AGE_GUARD, strip_stopped
-from .slot_extras import _allowed
 from .tag_dialect import (DEFAULT_FALLBACK, QUALITY_NEG, QUALITY_POS, _join, checkpoint_info, composition,
                           composition_negative, decide)
 
@@ -109,6 +108,20 @@ def species_fits(plan, group):
     allowed = group.get("species_only")
     species = plan["fields"].get("Вид", {}).get("tags")
     return not allowed or bool(species and species[0].lower() in allowed)
+
+
+def _allowed(group, axes, seen, nsfw):
+    """Можно ли добавить тег из группы при уже выбранных группах."""
+    if group["axis"] in axes or group.get("primary_only") or (nsfw and group.get("clothed")):
+        return False
+    names = {g["name"] for g in seen}
+    for key in ("requires", "requires_also"):
+        if group.get(key) and not names.intersection(group[key]):
+            return False
+    if names.intersection(group.get("forbids", [])):
+        return False
+    return not any(group["name"] in g.get("forbids", []) for g in seen)
+
 
 
 def seen_groups(data, plan):

@@ -6,7 +6,6 @@
 import hashlib
 import json
 import os
-import random
 import re
 import threading
 import time
@@ -302,22 +301,6 @@ def composition(text):
     return solo, multi, male
 
 
-COMP_VARIANTS = (("solo",), ("duo", "female/female"), ("duo", "male/female"), ("trio",), ("group",),
-                 ("2girls",), ("1boy", "1girl"), ("3girls",), ("multiple girls",))
-
-
-def single_composition(text):
-    """Оставляет один состав, если слот выбрал несколько: ErePromptRandomizer хранит число активных тегов."""
-    parts = [t.strip() for t in (text or "").split(",") if t.strip()]
-    low = {t.lower() for t in parts}
-    found = [v for v in COMP_VARIANTS if all(t in low for t in v)]
-    if len(found) < 2:
-        return text
-    keep = random.Random(text).choice(found)
-    drop = {t for v in found for t in v} - set(keep)
-    return _join(", ".join(t for t in parts if t.lower() not in drop))
-
-
 # Мужской персонаж соло и male/male не нужны никогда; при solo — запрещаем второго персонажа
 COMP_NEG_ALWAYS = "male/male, male focus, yaoi, 2boys, multiple boys, bara, feral, quadruped"
 COMP_NEG_SOLO = "duo, trio, group, 1boy, male, 2girls, multiple girls"
@@ -344,59 +327,3 @@ def _join(*parts):
                 seen.add(k)
                 out.append(t)
     return ", ".join(out)
-
-
-class TagDialectSwitch:
-    """Выбирает ветку промпта (e621 или Danbooru) по тому, что понимает чекпоинт,
-    и добавляет качество-теги под семейство модели (Illustrious/NoobAI, Pony, SDXL, Anima).
-    Считается только выбранная ветка (lazy-входы)."""
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "ckpt_name": ("STRING", {"forceInput": True}),
-                "mode": (["auto", "e621", "danbooru"], {"default": "auto"}),
-                "fallback_regex": ("STRING", {"default": DEFAULT_FALLBACK,
-                                              "tooltip": "Если модели нет на Civitai: путь совпал -> e621, иначе Danbooru"}),
-                "add_quality": ("BOOLEAN", {"default": True,
-                                            "tooltip": "Добавить в начало качество-теги под семейство модели (score_9… для Pony и т.д.), а в негатив — их пару"}),
-                "composition_negative": ("BOOLEAN", {"default": True,
-                                                     "tooltip": "Негатив по составу: всегда без male/male и мужского соло; при solo — без второго персонажа"}),
-            },
-            "optional": {
-                "e621_text": ("STRING", {"forceInput": True, "lazy": True}),
-                "danbooru_text": ("STRING", {"forceInput": True, "lazy": True}),
-                "negative_text": ("STRING", {"forceInput": True}),
-            },
-        }
-
-    RETURN_TYPES = ("STRING", "STRING", "STRING", "BOOLEAN", "STRING", "STRING")
-    RETURN_NAMES = ("text", "dialect", "info", "is_e621", "negative", "family")
-    FUNCTION = "run"
-    CATEGORY = "utils/prompt"
-
-    def check_lazy_status(self, ckpt_name, mode, fallback_regex, add_quality=True, composition_negative=True,
-                          e621_text=None, danbooru_text=None, negative_text=None):
-        d, _, _ = decide(ckpt_name, mode, fallback_regex)
-        if d == "e621" and e621_text is None:
-            return ["e621_text"]
-        if d == "danbooru" and danbooru_text is None:
-            return ["danbooru_text"]
-        return []
-
-    def run(self, ckpt_name, mode, fallback_regex, add_quality=True, composition_negative=True,
-            e621_text=None, danbooru_text=None, negative_text=None):
-        d, info, fam = decide(ckpt_name, mode, fallback_regex)
-        text = single_composition((e621_text if d == "e621" else danbooru_text) or "")
-        neg = negative_text or ""
-        if add_quality:
-            q = QUALITY_POS.get(fam, QUALITY_POS["other"]).format(
-                source="source_furry" if d == "e621" else "source_anime")
-            text = _join(q, text)
-            neg = _join(neg, QUALITY_NEG.get(fam, QUALITY_NEG["other"]))
-        if composition_negative:
-            neg = _join(neg, globals()["composition_negative"](text))
-        info = f"{d.upper()} · семейство {fam} ← {info}  [{ckpt_name}]"
-        print(f"[TagDialect] {info}")
-        return {"ui": {"text": [info]}, "result": (text, d, info, d == "e621", neg, fam)}

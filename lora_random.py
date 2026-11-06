@@ -51,11 +51,9 @@ NSFW_NAME = re.compile(r"nsfw|sexy|lingerie|underwear|nude|lewd|nylon|stocking|s
 NSFW_TAGS = {"nsfw", "sexy", "lingerie", "underwear", "nude", "nudity", "lewd", "fetish", "hentai", "porn", "erotic", "sex"}
 # Концепты со сценой с мужчиной: роль concept, но без партнёра они ломают состав
 PARTNER_RE = re.compile(r"tugging|sitting.?on.?lap|titty.?sucking", re.I)
-NSFW_PROMPT = re.compile(r"(^|,)\s*(nsfw|explicit|rating[_ ]explicit|questionable|nude)\s*(,|$)", re.I)
 ROLES = ["style", "clothing", "body", "act", "concept", "detail", "other"]
 DEF_QUOTAS = "style=1, clothing=1, body=1, act=1, concept=2, detail=2, other=1"
 DEF_WEIGHTS = "style=0.6-0.8, clothing=0.7-0.9, body=0.5-0.8, act=0.8-1.0, concept=0.6-0.9, detail=0.3-0.6, other=0.5-0.8"
-DEF_SLOTMAP = "clothing=Одежда; style=Художник,Стиль; body=Телосложение"
 
 
 def _valid_safetensors(path):
@@ -282,32 +280,6 @@ def _triggers(words, limit=2):
     return clean[:limit]
 
 
-def _slot_tags(prompt, prefixes):
-    """Теги, которые выбрали слоты конструктора с такими заголовками (из исполняемого графа)."""
-    tags = []
-    for node in (prompt or {}).values():
-        if not isinstance(node, dict) or not str(node.get("class_type", "")).startswith("ErePrompt"):
-            continue
-        title = (node.get("_meta") or {}).get("title", "")
-        if any(title.lower().startswith(p.lower()) for p in prefixes):
-            txt = (node.get("inputs") or {}).get("text")
-            if isinstance(txt, str):
-                tags += [t.strip() for t in txt.split(",") if t.strip()]
-    return tags
-
-
-def _remove_tags(text, tags):
-    drop = {t.lower() for t in tags}
-    kept, removed = [], []
-    for t in (text or "").split(","):
-        s = t.strip()
-        if s and s.lower() in drop:
-            removed.append(s)
-        elif s:
-            kept.append(s)
-    return ", ".join(kept), removed
-
-
 def choose_loras(ck_fam, allow_nsfw, solo, multi, male, want, quota, wr, seed, max_loras, chance,
                  weight_budget, male_preference, exclude_regex, always_include):
     """Выбирает LoRA под чекпоинт и состав и считает веса. Роль из want вне списка не берётся."""
@@ -369,86 +341,3 @@ def choose_loras(ck_fam, allow_nsfw, solo, multi, male, want, quota, wr, seed, m
     ws = [round(w * (scale if l["role"] != "detail" else 1.0), 2) for l, w in zip(chosen, ws)]
     return {"chosen": chosen, "weights": ws, "main": main, "scale": scale,
             "fit": n_ok, "skipped": skipped, "catalog": cat}
-
-
-class LoraRandomizer:
-    """Добавляет к промпту до max_loras случайных LoRA, совместимых с чекпоинтом, без конфликтов со слотами."""
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "text": ("STRING", {"forceInput": True}),
-                "ckpt_name": ("STRING", {"forceInput": True}),
-                "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF}),
-                "max_loras": ("INT", {"default": 10, "min": 0, "max": 20}),
-                "chance": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 1.0, "step": 0.05,
-                                     "tooltip": "Вероятность добавить каждую следующую LoRA (0.8 ≈ в среднем 3–4 за раз)"}),
-                "roles": ("STRING", {"default": ", ".join(ROLES),
-                                     "tooltip": "Из каких ролей брать: style, clothing, body, act (секс-сцены), concept, detail, other, character"}),
-                "quotas": ("STRING", {"default": DEF_QUOTAS, "tooltip": "Сколько LoRA каждой роли максимум за раз"}),
-                "weights": ("STRING", {"default": DEF_WEIGHTS, "tooltip": "Диапазон веса по ролям"}),
-                "weight_budget": ("FLOAT", {"default": 3.5, "min": 0.5, "max": 10.0, "step": 0.1,
-                                            "tooltip": "Если сумма весов (без detail) больше — все веса пропорционально уменьшаются"}),
-                "male_preference": ("FLOAT", {"default": 0.35, "min": 0.0, "max": 1.0, "step": 0.05,
-                                              "tooltip": "Насколько реже брать LoRA с мужской анатомией (1 = на равных, 0 = никогда)"}),
-                "nsfw_loras": (["auto (по промпту)", "только SFW", "разрешить"], {"default": "auto (по промпту)"}),
-                "add_triggers": ("BOOLEAN", {"default": True}),
-                "replace_slots": ("BOOLEAN", {"default": True,
-                                              "tooltip": "LoRA одежды/стиля/тела вычёркивает тег соответствующего слота конструктора"}),
-                "slot_map": ("STRING", {"default": DEF_SLOTMAP, "tooltip": "роль=заголовки слотов (начало заголовка)"}),
-                "exclude_regex": ("STRING", {"default": ""}),
-                "always_include": ("STRING", {"default": "", "tooltip": "Имена файлов через запятую — добавляются всегда"}),
-            },
-            "hidden": {"prompt": "PROMPT"},
-        }
-
-    RETURN_TYPES = ("STRING", "STRING")
-    RETURN_NAMES = ("text", "info")
-    FUNCTION = "run"
-    CATEGORY = "utils/prompt"
-
-    def run(self, text, ckpt_name, seed, max_loras, chance, roles, quotas, weights, weight_budget, male_preference,
-            nsfw_loras, add_triggers, replace_slots, slot_map, exclude_regex, always_include, prompt=None):
-        _, ck_fam, _ = checkpoint_info(ckpt_name)
-        want = {r.strip().lower() for r in roles.split(",") if r.strip()}
-        quota = {k: int(v) for k, v in _parse_map(quotas, num=True).items() if not isinstance(v, list)}
-        wr = {k: (v if isinstance(v, list) else [v, v]) for k, v in _parse_map(weights, num=True).items()}
-        allow_nsfw = {"разрешить": True, "только SFW": False}.get(nsfw_loras, bool(NSFW_PROMPT.search(text or "")))
-        solo, multi, male = composition(text)
-        pick = choose_loras(ck_fam, allow_nsfw, solo, multi, male, want, quota, wr, seed, max_loras, chance,
-                            weight_budget, male_preference, exclude_regex, always_include)
-        chosen, ws, main, scale = pick["chosen"], pick["weights"], pick["main"], pick["scale"]
-        n_ok, skipped, cat = pick["fit"], pick["skipped"], pick["catalog"]
-
-        # LoRA заменяет слот конструктора
-        out, replaced = text or "", []
-        if replace_slots:
-            smap = _parse_map(slot_map)
-            for role in {l["role"] for l in chosen}:
-                if role in smap:
-                    out, rem = _remove_tags(out, _slot_tags(prompt, smap[role]))
-                    replaced += [f"{r} (→ {role})" for r in rem]
-
-        trig, tags, lines = [], [], []
-        for l, w in zip(chosen, ws):
-            t = _triggers(l["trained"]) if add_triggers else []
-            trig += t
-            tags.append(f"<lora:{l['stem']}:{w}>")
-            rec = l.get("rec")
-            lines.append(f"{l['stem']} ×{w} [{l['role']}{', ♂' if l['male'] else ''}, {l['family']}]"
-                         + (f" (реком. {rec['lo']}–{rec['hi']}, {rec['src']})" if rec else "")
-                         + (f" + {', '.join(t)}" if t else ""))
-        out = _join(out, *trig)
-        if tags:
-            out += " " + " ".join(tags)
-
-        comp = "solo" if solo else ("с мужским персонажем" if male else ("несколько" if multi else "не указан"))
-        sk = ", ".join(f"{k} {v}" for k, v in skipped.items())
-        info = (f"Чекпоинт: {ck_fam}; состав: {comp}; NSFW-LoRA {'можно' if allow_nsfw else 'нельзя'}\n"
-                f"Подходящих LoRA: {n_ok} из {len(cat)}" + (f" (отсеяно: {sk})" if sk else "")
-                + (f"\nБюджет весов: сумма {main:.2f} → ×{scale:.2f}" if scale < 1 else "")
-                + ("\nВыбрано " + str(len(chosen)) + ":\n  " + "\n  ".join(lines) if lines else "\nВыбрано: ничего")
-                + ("\nЗаменены теги слотов: " + ", ".join(replaced) if replaced else ""))
-        print(f"[LoraRandom] {info}")
-        return {"ui": {"text": [info]}, "result": (out, info)}
