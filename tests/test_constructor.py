@@ -41,7 +41,7 @@ def generate(seed, dialect="e621", family="illu", rating="NSFW", composition=cn.
         plan = NODES["PromptScene"]().run(plan, 0.9, 0.5, 0.15, 2, **scene)[0]
         plan = NODES["PromptLoras"]().run(plan, 10, 0.6, 3.5, 0.35, "", "")[0]
         result = NODES["PromptResult"]().run(plan, True)["result"]
-    return dict(text=result[0], negative=result[1], recipe=result[3], clean=result[4], plan=plan)
+    return dict(text=result[0], negative=result[1], recipe=result[3], clean=result[4], face=result[5], plan=plan)
 
 
 def tags(text):
@@ -155,6 +155,12 @@ class Presets(unittest.TestCase):
         self.assertEqual(cn.preset_for("Pony\\base\\ponyDiffusionV6XL_v6TurboMerge.safetensors")["steps"], 12)
         self.assertEqual(cn.preset_for("Pony\\base\\ponyDiffusionV6XL_v6StartWithThisOne.safetensors")["steps"], 25)
         self.assertEqual(cn.preset_for("unknown.safetensors")["cfg"], 5)
+
+    def test_face_prompt_only_for_solo(self):
+        for seed in range(400):
+            p = generate(seed)
+            self.assertEqual(bool(p["face"]), p["plan"]["composition"] == "solo")
+            self.assertFalse([t for t in tags(p["face"]) if safety.is_stopped(t)])
 
     def test_unsupported_checkpoint_gives_clear_error(self):
         with self.assertRaisesRegex(ValueError, "SDXL"):

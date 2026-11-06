@@ -212,6 +212,17 @@ def pick_ambient(plan, data):
     return tags
 
 
+def face_prompt(plan, quality):
+    """Короткий промпт лица для детейлера: полный промпт рисует в кропе лишние детали. Для пар пусто: лица разные."""
+    if plan["composition"] != "solo":
+        return ""
+    fields = plan["fields"]
+    parts = [quality, "furry, anthro, female, adult, mature female, face focus"]
+    for name in ("Вид", "Окрас", "Глаза", "Эмоция"):
+        parts += fields.get(name, {}).get("tags", [])[:2]
+    return strip_stopped(_join(*parts))[0]
+
+
 def partner_ban(data):
     """Эмоции, которые в сцене с партнёром читаются как несогласие."""
     groups = data["fields"]["Эмоция"]["groups"]
@@ -606,8 +617,8 @@ class PromptResult:
             },
         }
 
-    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "STRING")
-    RETURN_NAMES = ("text", "negative", "info", "recipe", "clean")
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "STRING", "STRING")
+    RETURN_NAMES = ("text", "negative", "info", "recipe", "clean", "face")
     FUNCTION = "run"
     CATEGORY = "utils/prompt/constructor"
 
@@ -626,11 +637,12 @@ class PromptResult:
             parts.append("sex")
         text = _join(*parts, *plan["triggers"])
         negative = _join(AGE_GUARD, plan.get("negative"), rating["negative"])
+        quality = ""
         if add_quality:
             source = "source_furry" if dialect == "e621" else "source_anime"
             preset = preset_for(plan["ckpt"])
-            quality = preset.get("quality") or QUALITY_POS.get(family, QUALITY_POS["other"])
-            text = _join(quality.format(source=source), text)
+            quality = (preset.get("quality") or QUALITY_POS.get(family, QUALITY_POS["other"])).format(source=source)
+            text = _join(quality, text)
             negative = _join(negative, preset.get("quality_neg") or QUALITY_NEG.get(family, QUALITY_NEG["other"]))
         negative = _join(negative, composition_negative(text))
         text, stopped = strip_stopped(text)
@@ -650,7 +662,7 @@ class PromptResult:
         info = "\n".join([f"Словарь: {dialect} · {family} ← {plan['why']}", f"Рейтинг: {plan['rating']}",
                           f"Состав: {plan['composition']}"] + notes)
         print(f"[Constructor] {info}")
-        return {"ui": {"text": [info]}, "result": (text, negative, info, recipe, clean)}
+        return {"ui": {"text": [info]}, "result": (text, negative, info, recipe, clean, face_prompt(plan, quality))}
 
 
 class PromptApplyLoras:
