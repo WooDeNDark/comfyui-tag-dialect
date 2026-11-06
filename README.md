@@ -4,9 +4,11 @@ Random prompt constructor for ComfyUI: coherent tag prompts for SDXL checkpoints
 
 ## Install
 
-Clone into `custom_nodes` and restart ComfyUI. The ready workflow is in `workflows/`. It needs these node packs: rgthree-comfy, comfyui-image-saver, ComfyUI-Impact-Pack, ComfyUI-Impact-Subpack, ComfyUI_UltimateSDUpscale, cg-image-filter, ComfyUI-KJNodes, ComfyUI-Custom-Scripts.
+Clone into `custom_nodes` and restart ComfyUI. The ready workflow is in `workflows/`. It needs these node packs: rgthree-comfy, comfyui-image-saver, ComfyUI-Impact-Pack, ComfyUI-Impact-Subpack, ComfyUI-TiledDiffusion, cg-image-filter, ComfyUI-KJNodes, ComfyUI-Custom-Scripts.
 
 The face detailer uses [Fdetailer](https://civitai.com/models/1228695): put `fdetailer_v11.pt` into `models/ultralytics/segm`.
+
+The upscale pass needs an SDXL tile ControlNet in `models/controlnet`, named `controlnet-tile-sdxl.safetensors`. It runs TiledDiffusion at denoise 0.35 with the ControlNet at strength 0.5, released at 0.8 of the schedule. Without the ControlNet the pass draws extra small figures on empty background: the prompt applies to every tile. Held to the end, it removes most of the added detail.
 
 ## Dialect
 
